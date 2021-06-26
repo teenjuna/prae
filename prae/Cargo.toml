@@ -3,3 +3,6 @@ name = "prae"
 version = "0.1.0"
 authors = ["Alex Ryapolov <ryapolov@pm.me>"]
 edition = "2018"
+
+[dependencies]
+thiserror = "1.0.25"
