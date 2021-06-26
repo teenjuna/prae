@@ -1,18 +1,22 @@
 use std::marker::PhantomData;
 
-pub trait Guard<E> {
+pub trait ValidateGuard<E> {
     type Target;
     fn adjust(v: &mut Self::Target);
     fn validate(v: &Self::Target) -> Option<E>;
 }
 
 #[derive(Debug)]
-pub struct Guarded<T, E, G: Guard<E, Target = T>>(T, PhantomData<E>, PhantomData<G>);
+pub struct ValidateGuarded<T, E, G: ValidateGuard<E, Target = T>>(
+    T,
+    PhantomData<E>,
+    PhantomData<G>,
+);
 
-impl<T, E, G> Guarded<T, E, G>
+impl<T, E, G> ValidateGuarded<T, E, G>
 where
     E: std::fmt::Debug,
-    G: Guard<E, Target = T>,
+    G: ValidateGuard<E, Target = T>,
 {
     pub fn new<V: Into<T>>(v: V) -> Result<Self, E> {
         let mut v: T = v.into();
@@ -51,60 +55,62 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    mod validate_guard {
+        use crate::core::*;
 
-    #[derive(Debug)]
-    struct UsernameGuard;
-    impl Guard<()> for UsernameGuard {
-        type Target = String;
-        fn adjust(v: &mut Self::Target) {
-            *v = v.trim().to_owned();
-        }
-        fn validate(v: &Self::Target) -> Option<()> {
-            if v.is_empty() {
-                Some(())
-            } else {
-                None
+        #[derive(Debug)]
+        struct UsernameGuard;
+        impl ValidateGuard<()> for UsernameGuard {
+            type Target = String;
+            fn adjust(v: &mut Self::Target) {
+                *v = v.trim().to_owned();
+            }
+            fn validate(v: &Self::Target) -> Option<()> {
+                if v.is_empty() {
+                    Some(())
+                } else {
+                    None
+                }
             }
         }
-    }
-    type Username = Guarded<String, (), UsernameGuard>;
+        type Username = ValidateGuarded<String, (), UsernameGuard>;
 
-    #[test]
-    fn construction_with_valid_value_succeeds() {
-        let un = Username::new(" username\n").unwrap();
-        assert_eq!(un.get(), "username");
-    }
+        #[test]
+        fn construction_with_valid_value_succeeds() {
+            let un = Username::new(" username\n").unwrap();
+            assert_eq!(un.get(), "username");
+        }
 
-    #[test]
-    fn construction_with_invalid_value_fails() {
-        Username::new("   \n").unwrap_err();
-    }
+        #[test]
+        fn construction_with_invalid_value_fails() {
+            Username::new("   \n").unwrap_err();
+        }
 
-    #[test]
-    fn mutation_with_valid_value_succeeds() {
-        let mut un = Username::new("username").unwrap();
-        un.mutate(|v| *v = format!(" new {}\n", v));
-        assert_eq!(un.get(), "new username");
-    }
+        #[test]
+        fn mutation_with_valid_value_succeeds() {
+            let mut un = Username::new("username").unwrap();
+            un.mutate(|v| *v = format!(" new {}\n", v));
+            assert_eq!(un.get(), "new username");
+        }
 
-    #[test]
-    #[should_panic]
-    fn mutation_with_invalid_value_panics() {
-        let mut un = Username::new("username").unwrap();
-        un.mutate(|v| *v = "   \n".to_owned());
-    }
+        #[test]
+        #[should_panic]
+        fn mutation_with_invalid_value_panics() {
+            let mut un = Username::new("username").unwrap();
+            un.mutate(|v| *v = "   \n".to_owned());
+        }
 
-    #[test]
-    fn falliable_mutation_with_valid_value_succeds() {
-        let mut un = Username::new("username").unwrap();
-        un.try_mutate(|v| *v = format!(" new {}\n", v)).unwrap();
-        assert_eq!(un.get(), "new username");
-    }
+        #[test]
+        fn falliable_mutation_with_valid_value_succeds() {
+            let mut un = Username::new("username").unwrap();
+            un.try_mutate(|v| *v = format!(" new {}\n", v)).unwrap();
+            assert_eq!(un.get(), "new username");
+        }
 
-    #[test]
-    fn falliable_mutation_with_valid_value_fails() {
-        let mut un = Username::new("username").unwrap();
-        un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
+        #[test]
+        fn falliable_mutation_with_valid_value_fails() {
+            let mut un = Username::new("username").unwrap();
+            un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
+        }
     }
 }
