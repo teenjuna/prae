@@ -106,7 +106,7 @@ where
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 #[error("validation error")]
 pub struct ValidationError;
 
@@ -168,6 +168,7 @@ mod tests {
         fn falliable_mutation_with_valid_value_fails() {
             let mut un = Username::new("username").unwrap();
             un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
+            assert_eq!(un.get(), "username");
         }
     }
 
@@ -223,6 +224,7 @@ mod tests {
         fn falliable_mutation_with_valid_value_fails() {
             let mut un = Username::new("username").unwrap();
             un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
+            assert_eq!(un.get(), "username");
         }
     }
 }
