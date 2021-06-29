@@ -1,4 +1,4 @@
-This crate provides a way to define type wrappers that behave as close as possible to
+This crate provides a convenient macro to define type wrappers that behave as close as possible to
 the underlying type, but guarantee to uphold arbitrary invariants at all times.
 
 # Usage
@@ -70,3 +70,5 @@ prae::define! {
 assert!(matches!(Username::new("  "), Err(UsernameError)));
 ```
 
+# Credits
+This crate was highly inspired by the [tightness](https://github.com/PabloMansanet/tightness) crate. It's basically just a fork of tightness with a slightly different philosophy. See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
