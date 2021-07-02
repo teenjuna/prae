@@ -3,6 +3,8 @@ name = "prae_macro"
 version = "0.1.0"
 authors = ["Alex Ryapolov <ryapolov@pm.me>"]
 edition = "2018"
+license = "Unlicense"
+description = "A proc macro for the `prae` crate. Should not be used directly."
 
 [lib]
 proc-macro = true
