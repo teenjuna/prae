@@ -1,6 +1,6 @@
 [package]
 name = "prae"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Alex Ryapolov <ryapolov@pm.me>"]
 edition = "2018"
 license = "Unlicense"
@@ -12,5 +12,5 @@ keywords = ["validation", "macro", "invariant", "generation"]
 categories = ["development-tools"]
 
 [dependencies]
-prae_macro = { version = "0.1.0", path = "../prae_macro" }
+prae_macro = { version = "0.2.0", path = "../prae_macro" }
 thiserror = "1.0.25"

@@ -1,4 +1,4 @@
-use proc_macro::TokenStream;
+pub(crate) use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
@@ -32,39 +32,37 @@ pub fn define(input: TokenStream) -> TokenStream {
         },
     };
 
-    let output = match guard {
-        GuardClosure::Ensure(EnsureClosure(ensure_closure)) => {
-            let guard_ident = format_ident!("{}Guard", ident);
-            quote! {
-               #[derive(Debug)]
-                #vis struct #guard_ident;
-                impl prae::EnsureGuard for #guard_ident {
-                    type Target = #ty;
-                    #adjust_fn
-                    fn ensure(v: &Self::Target) -> bool {
-                        let f: fn(&Self::Target) -> bool = #ensure_closure;
-                        f(v)
-                    }
-                }
-                #vis type #ident = prae::EnsureGuarded<#ty, #guard_ident>;
+    let validate_fn = match &guard {
+        GuardClosure::Ensure(EnsureClosure(closure)) => quote! {
+            fn validate(v: &Self::Target) -> Option<prae::ValidationError> {
+                let f: fn(&Self::Target) -> bool = #closure;
+                if f(v) { None } else { Some(prae::ValidationError) }
             }
-        }
-        GuardClosure::Validate(ValidateClosure(validate_closure, err_type)) => {
-            let guard_ident = format_ident!("{}Guard", ident);
-            quote! {
-               #[derive(Debug)]
-                #vis struct #guard_ident;
-                impl prae::ValidateGuard<#err_type> for #guard_ident {
-                    type Target = #ty;
-                    #adjust_fn
-                    fn validate(v: &Self::Target) -> Option<#err_type> {
-                        let f: fn(&Self::Target) -> Option<#err_type> = #validate_closure;
-                        f(v)
-                    }
-                }
-                #vis type #ident = prae::ValidateGuarded<#ty, #err_type, #guard_ident>;
+        },
+        GuardClosure::Validate(ValidateClosure(closure, err_ty)) => quote! {
+            fn validate(v: &Self::Target) -> Option<#err_ty> {
+                let f: fn(&Self::Target) -> Option<#err_ty> = #closure;
+                f(v)
             }
+        },
+    };
+
+    let err_ty = match &guard {
+        GuardClosure::Ensure(_) => quote!(prae::ValidationError),
+        GuardClosure::Validate(ValidateClosure(_, err_ty)) => quote!(#err_ty),
+    };
+
+    let guard_ident = format_ident!("{}Guard", ident);
+    let output = quote! {
+       #[derive(Debug)]
+        #vis struct #guard_ident;
+        impl prae::Guard for #guard_ident {
+            type Target = #ty;
+            type Error = #err_ty;
+            #adjust_fn
+            #validate_fn
         }
+        #vis type #ident = prae::Guarded<#ty, #err_ty, #guard_ident>;
     };
 
     TokenStream::from(output)

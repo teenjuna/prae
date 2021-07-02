@@ -1,5 +1,5 @@
-//! This crate provides a way to define type wrappers that behave as close as possible to
-//! the underlying type, but guarantee to uphold arbitrary invariants at all times.
+//! This crate provides a convenient macro that allows you to generate type wrappers that promise
+//! to always uphold arbitrary invariants that you specified.
 //!
 //! # Examples
 //! Let's create a `Username` type. It will be a wrapper around non-empty `String`:
@@ -47,7 +47,7 @@
 //! want to return a custom error. And `prae` can help with this:
 //! ```
 //! #[derive(Debug)]
-//! struct UsernameError;
+//! pub struct UsernameError;
 //!
 //! prae::define! {
 //!     pub Username: String

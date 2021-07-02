@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/prae/badge.svg)](https://docs.rs/prae)
 [![crates.io license](https://shields.io/crates/l/prae)](https://crates.io/crates/prae)
 
-This crate provides a convenient macro that allows you to generate type wrappers that promise to always hold arbitrary invariants specified by you.
+This crate provides a convenient macro that allows you to generate type wrappers that promise to always uphold arbitrary invariants that you specified.
 
 # Usage
 
