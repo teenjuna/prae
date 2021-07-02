@@ -1,4 +1,10 @@
-use std::marker::PhantomData;
+use core::hash::Hash;
+use std::{
+    borrow::Borrow,
+    fmt::Debug,
+    marker::PhantomData,
+    ops::{Deref, Index},
+};
 use thiserror::Error;
 
 /// Default validation error. It is used for [`define!`](prae_macro::define) macro with `ensure`
@@ -71,6 +77,66 @@ where
         G::validate(&cloned).map_or(Ok(()), Err)?;
         self.0 = cloned;
         Ok(())
+    }
+}
+
+impl<T: Clone, E, G: Guard<Target = T, Error = E>> Clone for Guarded<T, E, G> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), Default::default(), Default::default())
+    }
+}
+
+impl<T, E, G: Guard<Target = T, Error = E>> Borrow<T> for Guarded<T, E, G> {
+    fn borrow(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T, E, G: Guard<Target = T, Error = E>> AsRef<T> for Guarded<T, E, G> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T, E, G: Guard<Target = T, Error = E>> Deref for Guarded<T, E, G> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: PartialEq, E, G: Guard<Target = T, Error = E>> PartialEq for Guarded<T, E, G> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl<T: Eq, E, G: Guard<Target = T, Error = E>> Eq for Guarded<T, E, G> {}
+
+impl<T: PartialOrd, E, G: Guard<Target = T, Error = E>> PartialOrd for Guarded<T, E, G> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: Ord, E, G: Guard<Target = T, Error = E>> Ord for Guarded<T, E, G> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<T: Copy, E, G: Guard<Target = T, Error = E>> Copy for Guarded<T, E, G> {}
+
+impl<T: Hash, E, G: Guard<Target = T, Error = E>> Hash for Guarded<T, E, G> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
+
+impl<T: Index<U>, U, E, G: Guard<Target = T, Error = E>> Index<U> for Guarded<T, E, G> {
+    type Output = T::Output;
+    fn index(&self, index: U) -> &Self::Output {
+        self.0.index(index)
     }
 }
 
