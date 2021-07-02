@@ -1,5 +1,10 @@
-This crate provides a convenient macro to define type wrappers that behave as close as possible to
-the underlying type, but guarantee to uphold arbitrary invariants at all times.
+# prae
+
+[![crates.io version](https://shields.io/crates/v/prae)](https://crates.io/crates/prae)
+[![docs.rs](https://docs.rs/prae/badge.svg)](https://docs.rs/prae)
+[![crates.io license](https://shields.io/crates/l/prae)](https://crates.io/crates/prae)
+
+This crate provides a convenient macro that allows you to generate type wrappers that promise to always hold arbitrary invariants specified by you.
 
 # Usage
 
@@ -11,7 +16,7 @@ prae::define!(pub Username: String ensure |u| !u.is_empty());
 // We can't create an invalid username.
 assert!(Username::new("").is_err());
 
-// But we can create a valid type!
+// But we can create a valid one!
 let mut u = Username::new("valid name").unwrap();
 assert_eq!(u.get(), "valid name");
 
@@ -69,6 +74,11 @@ prae::define! {
 
 assert!(matches!(Username::new("  "), Err(UsernameError)));
 ```
+
+Perfect! Now you can integrate it in your code and don't write `.map_err(...)` everywhere.
+
+# Drawbacks
+Although proc macros are very powerful, they aren't free. In this case, you have to pull up additional dependencies such as `syn` and `quote`, and expect a *slightly* slower compile times.
 
 # Credits
 This crate was highly inspired by the [tightness](https://github.com/PabloMansanet/tightness) crate. It's basically just a fork of tightness with a slightly different philosophy. See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
