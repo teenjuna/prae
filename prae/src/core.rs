@@ -1,4 +1,4 @@
-use core::hash::Hash;
+pub(crate) use core::hash::Hash;
 use std::{
     borrow::Borrow,
     fmt::Debug,
@@ -140,6 +140,36 @@ impl<T: Index<U>, U, E, G: Guard<Target = T, Error = E>> Index<U> for Guarded<T,
     }
 }
 
+#[cfg(feature = "serde")]
+impl<'de, T, E, G> serde::Deserialize<'de> for Guarded<T, E, G>
+where
+    T: serde::Deserialize<'de>,
+    E: std::fmt::Display + std::fmt::Debug,
+    G: Guard<Target = T, Error = E>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::new(T::deserialize(deserializer)?).map_err(|e: E| serde::de::Error::custom(e))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T, E, G> serde::Serialize for Guarded<T, E, G>
+where
+    T: serde::Serialize,
+    E: std::fmt::Display + std::fmt::Debug,
+    G: Guard<Target = T, Error = E>,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        T::serialize(self.get(), serializer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     mod validate_guard {
@@ -200,6 +230,38 @@ mod tests {
             let mut un = Username::new("username").unwrap();
             un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
             assert_eq!(un.get(), "username");
+        }
+
+        #[cfg(feature = "serde")]
+        mod serde {
+            use super::*;
+            use ::serde::{Deserialize, Serialize};
+
+            #[derive(Debug, Deserialize, Serialize)]
+            struct User {
+                username: Username,
+            }
+
+            #[test]
+            fn serialization_succeeds() {
+                let u = User {
+                    username: Username::new("  john doe  ").unwrap(),
+                };
+                let j = serde_json::to_string(&u).unwrap();
+                assert_eq!(j, r#"{"username":"john doe"}"#)
+            }
+
+            #[test]
+            fn deserialization_fails_with_invalid_value() {
+                let e = serde_json::from_str::<User>(r#"{ "username": "  " }"#).unwrap_err();
+                assert_eq!(e.to_string(), "username is empty at line 1 column 20");
+            }
+
+            #[test]
+            fn deserialization_succeeds_with_valid_value() {
+                let u = serde_json::from_str::<User>(r#"{ "username": "  john doe  " }"#).unwrap();
+                assert_eq!(u.username.get(), "john doe");
+            }
         }
     }
 }

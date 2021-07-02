@@ -77,6 +77,45 @@ assert!(matches!(Username::new("  "), Err(UsernameError)));
 
 Perfect! Now you can integrate it in your code and don't write `.map_err(...)` everywhere.
 
+# Serde integration
+
+You can enable serde integration with the `serde` feature. It will implement `Serialize` and `Deserialize` traits for the wrappers if the underlying type implements them. The deserialization will automatically fail if it contains invalid value. Here is an example:
+```rust
+use serde::{Deserialize, Serialize};
+
+prae::define! {
+    Username: String
+    adjust   |u| *u = u.trim().to_string()
+    validate |u| -> Option<&'static str> {
+        if u.is_empty() {
+            Some("username is empty")
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct User {
+    username: Username,
+}
+
+// Serialization works as expected.
+let u = User {
+    username: Username::new("  john doe  ").unwrap(),
+};
+let j = serde_json::to_string(&u).unwrap();
+assert_eq!(j, r#"{"username":"john doe"}"#)
+
+// Deserialization with invalid data fails.
+let e = serde_json::from_str::<User>(r#"{ "username": "  " }"#).unwrap_err();
+assert_eq!(e.to_string(), "username is empty at line 1 column 20");
+
+// And here we get a nice adjusted value.
+let u = serde_json::from_str::<User>(r#"{ "username": "  john doe  " }"#).unwrap();
+assert_eq!(u.username.get(), "john doe");
+```
+
 # Drawbacks
 Although proc macros are very powerful, they aren't free. In this case, you have to pull up additional dependencies such as `syn` and `quote`, and expect a *slightly* slower compile times.
 
