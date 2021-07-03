@@ -78,6 +78,11 @@ where
         Ok(())
     }
 
+    /// Retrieve the inner, unprotected value.
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+
     // Invariant must be upheld manually!
     pub unsafe fn new_manual<V: Into<T>>(v: V) -> Self {
         let v: T = v.into();
