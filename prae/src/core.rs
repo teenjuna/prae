@@ -1,6 +1,5 @@
 pub(crate) use core::hash::Hash;
 use std::{
-    borrow::Borrow,
     fmt::Debug,
     marker::PhantomData,
     ops::{Deref, Index},
@@ -31,9 +30,9 @@ pub trait Guard {
 /// A thin wrapper around an underlying type and a [`Guard`](Guard) bounded to it. It guarantees
 /// to always hold specified invariants and act as close as possible to the underlying type.
 #[derive(Debug)]
-pub struct Guarded<T, E, G: Guard<Target = T, Error = E>>(T, PhantomData<E>, PhantomData<G>);
+pub struct Guarded<G: Guard>(G::Target, PhantomData<G>);
 
-impl<T, E, G> Guarded<T, E, G>
+impl<T, E, G> Guarded<G>
 where
     E: std::fmt::Debug,
     G: Guard<Target = T, Error = E>,
@@ -44,7 +43,7 @@ where
         let mut v: T = v.into();
         G::adjust(&mut v);
         G::validate(&v).map_or(Ok(()), Err)?;
-        Ok(Self(v, Default::default(), Default::default()))
+        Ok(Self(v, Default::default()))
     }
 
     /// Returns a shared reference to the inner value.
@@ -80,93 +79,110 @@ where
     }
 }
 
-impl<T: Clone, E, G: Guard<Target = T, Error = E>> Clone for Guarded<T, E, G> {
+impl<G: Guard> Clone for Guarded<G>
+where
+    G::Target: Clone,
+{
     fn clone(&self) -> Self {
-        Self(self.0.clone(), Default::default(), Default::default())
+        Self(self.0.clone(), Default::default())
     }
 }
 
-impl<T, E, G: Guard<Target = T, Error = E>> Borrow<T> for Guarded<T, E, G> {
-    fn borrow(&self) -> &T {
+// impl<G: Guard> Borrow<G::Target> for Guarded<G> {
+//     fn borrow(&self) -> &G::Target {
+//         &self.0
+//     }
+// }
+
+impl<G: Guard> AsRef<G::Target> for Guarded<G> {
+    fn as_ref(&self) -> &G::Target {
         &self.0
     }
 }
 
-impl<T, E, G: Guard<Target = T, Error = E>> AsRef<T> for Guarded<T, E, G> {
-    fn as_ref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<T, E, G: Guard<Target = T, Error = E>> Deref for Guarded<T, E, G> {
-    type Target = T;
+impl<G: Guard> Deref for Guarded<G> {
+    type Target = G::Target;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T: PartialEq, E, G: Guard<Target = T, Error = E>> PartialEq for Guarded<T, E, G> {
+impl<G: Guard> PartialEq for Guarded<G>
+where
+    G::Target: PartialEq,
+{
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
     }
 }
 
-impl<T: Eq, E, G: Guard<Target = T, Error = E>> Eq for Guarded<T, E, G> {}
+impl<G: Guard> Eq for Guarded<G> where G::Target: Eq {}
 
-impl<T: PartialOrd, E, G: Guard<Target = T, Error = E>> PartialOrd for Guarded<T, E, G> {
+impl<G: Guard> PartialOrd for Guarded<G>
+where
+    G::Target: PartialOrd,
+{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<T: Ord, E, G: Guard<Target = T, Error = E>> Ord for Guarded<T, E, G> {
+impl<G: Guard> Ord for Guarded<G>
+where
+    G::Target: Ord,
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<T: Copy, E, G: Guard<Target = T, Error = E>> Copy for Guarded<T, E, G> {}
+impl<G: Guard> Copy for Guarded<G> where G::Target: Copy {}
 
-impl<T: Hash, E, G: Guard<Target = T, Error = E>> Hash for Guarded<T, E, G> {
+impl<G: Guard> Hash for Guarded<G>
+where
+    G::Target: Hash,
+{
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state)
     }
 }
 
-impl<T: Index<U>, U, E, G: Guard<Target = T, Error = E>> Index<U> for Guarded<T, E, G> {
-    type Output = T::Output;
+impl<U, G: Guard> Index<U> for Guarded<G>
+where
+    G::Target: Index<U>,
+{
+    type Output = <G::Target as Index<U>>::Output;
     fn index(&self, index: U) -> &Self::Output {
         self.0.index(index)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T, E, G> serde::Deserialize<'de> for Guarded<T, E, G>
+impl<'de, G: Guard> serde::Deserialize<'de> for Guarded<G>
 where
-    T: serde::Deserialize<'de>,
-    E: std::fmt::Display + std::fmt::Debug,
-    G: Guard<Target = T, Error = E>,
+    G::Target: serde::Deserialize<'de>,
+    G::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        Self::new(T::deserialize(deserializer)?).map_err(|e: E| serde::de::Error::custom(e))
+        Self::new(G::Target::deserialize(deserializer)?)
+            .map_err(|e: G::Error| serde::de::Error::custom(e))
     }
 }
 
 #[cfg(feature = "serde")]
-impl<T, E, G> serde::Serialize for Guarded<T, E, G>
+impl<G: Guard> serde::Serialize for Guarded<G>
 where
-    T: serde::Serialize,
-    E: std::fmt::Display + std::fmt::Debug,
-    G: Guard<Target = T, Error = E>,
+    G::Target: serde::Serialize,
+    G::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        T::serialize(self.get(), serializer)
+        G::Target::serialize(self.get(), serializer)
     }
 }
 
@@ -191,7 +207,7 @@ mod tests {
                 }
             }
         }
-        type Username = Guarded<String, &'static str, UsernameGuard>;
+        type Username = Guarded<UsernameGuard>;
 
         #[test]
         fn construction_with_valid_value_succeeds() {

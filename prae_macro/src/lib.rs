@@ -62,7 +62,7 @@ pub fn define(input: TokenStream) -> TokenStream {
             #adjust_fn
             #validate_fn
         }
-        #vis type #ident = prae::Guarded<#ty, #err_ty, #guard_ident>;
+        #vis type #ident = prae::Guarded<#guard_ident>;
     };
 
     TokenStream::from(output)
