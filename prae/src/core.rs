@@ -1,4 +1,4 @@
-pub(crate) use core::hash::Hash;
+use core::hash::Hash;
 use std::{
     fmt::Debug,
     marker::PhantomData,
