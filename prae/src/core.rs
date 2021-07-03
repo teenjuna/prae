@@ -77,6 +77,31 @@ where
         self.0 = cloned;
         Ok(())
     }
+
+    // Invariant must be upheld manually!
+    pub unsafe fn new_manual<V: Into<T>>(v: V) -> Self {
+        let v: T = v.into();
+        debug_assert!(G::validate(&v).is_none());
+        Self(v, Default::default())
+    }
+
+    // Invariant must be upheld manually!
+    pub unsafe fn mutate_manual(&mut self, f: impl FnOnce(&mut T)) {
+        f(&mut self.0);
+        debug_assert!(G::validate(&self.0).is_none());
+    }
+
+    /// Gives mutable access to the internals without upholding invariants.
+    /// They must continue to be upheld manually while the reference lives!
+    pub unsafe fn get_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+
+    /// Verifies invariants. This is guaranteed to succeed unless you've used
+    /// one of the `unsafe` methods that require variants to be manually upheld.
+    pub fn verify(&self) -> Result<(), E> {
+        G::validate(&self.0).map_or(Ok(()), Err)
+    }
 }
 
 impl<G: Guard> Clone for Guarded<G>
