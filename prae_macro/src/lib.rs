@@ -36,7 +36,7 @@ pub fn define(input: TokenStream) -> TokenStream {
         GuardClosure::Ensure(EnsureClosure(closure)) => quote! {
             fn validate(v: &Self::Target) -> Option<prae::ValidationError> {
                 let f: fn(&Self::Target) -> bool = #closure;
-                if f(v) { None } else { Some(prae::ValidationError) }
+                if f(v) { None } else { Some(prae::ValidationError::new::<#ty>("Validation failed.") ) }
             }
         },
         GuardClosure::Validate(ValidateClosure(closure, err_ty)) => quote! {

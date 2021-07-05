@@ -1,15 +1,41 @@
 use core::hash::Hash;
-use std::{
-    fmt::Debug,
-    ops::{Deref, Index},
-};
-use thiserror::Error;
+use std::fmt;
+use std::ops::{Deref, Index};
 
 /// Default validation error. It is used for [`define!`](prae_macro::define) macro with `ensure`
 /// keyword.
-#[derive(Debug, PartialEq, Error)]
-#[error("provided value is not valid")]
-pub struct ValidationError;
+#[derive(Clone)]
+pub struct ValidationError {
+    /// The name of the type where this ValidationError originated.
+    pub source_type: &'static str,
+    /// The human readable message.
+    pub message: &'static str,
+}
+
+/// Commonly used ValidationErrors
+impl ValidationError {
+    /// The input given was empty (whitespace-only strings are considered empty)
+    pub fn new<T>(message: &'static str) -> Self {
+        ValidationError {
+            source_type: std::any::type_name::<T>(),
+            message,
+        }
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+impl fmt::Debug for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "provided value is not valid")
+    }
+}
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "provided value is not valid")
+    }
+}
 
 /// A trait that represents a guard bound, e.g. a type that is being guarded, `adjust`/`validate`
 /// functions and a possible validation error.
@@ -33,7 +59,7 @@ pub struct Guarded<G: Guard>(G::Target);
 
 impl<T, E, G> Guarded<G>
 where
-    E: Debug,
+    E: fmt::Debug,
     G: Guard<Target = T, Error = E>,
 {
     /// Constructor. Will return an error if the provided argument `v`
