@@ -1,7 +1,6 @@
 use core::hash::Hash;
 use std::{
     fmt::Debug,
-    marker::PhantomData,
     ops::{Deref, Index},
 };
 use thiserror::Error;
@@ -30,7 +29,7 @@ pub trait Guard {
 /// A thin wrapper around an underlying type and a [`Guard`](Guard) bounded to it. It guarantees
 /// to always hold specified invariants and act as close as possible to the underlying type.
 #[derive(Debug)]
-pub struct Guarded<G: Guard>(G::Target, PhantomData<G>);
+pub struct Guarded<G: Guard>(G::Target);
 
 impl<T, E, G> Guarded<G>
 where
@@ -43,7 +42,7 @@ where
         let mut v: T = v.into();
         G::adjust(&mut v);
         G::validate(&v).map_or(Ok(()), Err)?;
-        Ok(Self(v, Default::default()))
+        Ok(Self(v))
     }
 
     /// Returns a shared reference to the inner value.
@@ -87,7 +86,7 @@ where
     pub unsafe fn new_manual<V: Into<T>>(v: V) -> Self {
         let v: T = v.into();
         debug_assert!(G::validate(&v).is_none());
-        Self(v, Default::default())
+        Self(v)
     }
 
     // Invariant must be upheld manually!
@@ -114,7 +113,7 @@ where
     G::Target: Clone,
 {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), Default::default())
+        Self(self.0.clone())
     }
 }
 
