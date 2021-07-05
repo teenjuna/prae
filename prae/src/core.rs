@@ -33,7 +33,7 @@ pub struct Guarded<G: Guard>(G::Target);
 
 impl<T, E, G> Guarded<G>
 where
-    E: std::fmt::Debug,
+    E: Debug,
     G: Guard<Target = T, Error = E>,
 {
     /// Constructor. Will return an error if the provided argument `v`
