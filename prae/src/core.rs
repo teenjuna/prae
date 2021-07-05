@@ -26,7 +26,7 @@ pub trait Guard {
     fn validate(v: &Self::Target) -> Option<Self::Error>;
 }
 
-/// A thin wrapper around an underlying type and a [`Guard`](Guard) bounded to it. It guarantees
+/// A thin wrapper around the underlying type and the [`Guard`](Guard) bounded to it. It guarantees
 /// to always hold specified invariants and act as close as possible to the underlying type.
 #[derive(Debug)]
 pub struct Guarded<G: Guard>(G::Target);
@@ -82,14 +82,16 @@ where
         self.0
     }
 
-    // Invariant must be upheld manually!
+    /// Construct a value without calling `adjust` and `validate`. The invariant must be upheld
+    /// manually. Should be used only for optimisation purposes.
     pub unsafe fn new_manual<V: Into<T>>(v: V) -> Self {
         let v: T = v.into();
         debug_assert!(G::validate(&v).is_none());
         Self(v)
     }
 
-    // Invariant must be upheld manually!
+    /// Mutate a value without calling `adjust` and `validate`. The invariant must be upheld
+    /// manually. Should be used only for optimisation purposes.
     pub unsafe fn mutate_manual(&mut self, f: impl FnOnce(&mut T)) {
         f(&mut self.0);
         debug_assert!(G::validate(&self.0).is_none());
