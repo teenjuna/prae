@@ -9,7 +9,7 @@ where
     T: fmt::Debug
 {
     /// The name of the type where this ConstructionError originated.
-    guarded_type_name: String,
+    guarded_type_name: &'static str,
     /// The input value that caused the error.
     value: T,
 }
@@ -19,9 +19,9 @@ where
     T: fmt::Debug
 {
     /// Create a new ConstructionError with the input value that failed.
-    pub fn new(guarded_type_name: &str, value: T) -> Self {
+    pub fn new(guarded_type_name: &'static str, value: T) -> Self {
         ConstructionError {
-            guarded_type_name: guarded_type_name.into(),
+            guarded_type_name,
             value,
         }
     }
