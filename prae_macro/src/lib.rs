@@ -34,9 +34,9 @@ pub fn define(input: TokenStream) -> TokenStream {
 
     let validate_fn = match &guard {
         GuardClosure::Ensure(EnsureClosure(closure)) => quote! {
-            fn validate(v: &Self::Target) -> Option<prae::ValidationError> {
+            fn validate(v: &Self::Target) -> Option<prae::ConstructionError::<#ty>> {
                 let f: fn(&Self::Target) -> bool = #closure;
-                if f(v) { None } else { Some(prae::ValidationError::new::<#ty>("value given is not valid".into()) ) }
+                if f(v) { None } else { Some(prae::ConstructionError::<#ty>::new(stringify!(#ident), v.clone()) ) }
             }
         },
         GuardClosure::Validate(ValidateClosure(closure, err_ty)) => quote! {
@@ -48,7 +48,7 @@ pub fn define(input: TokenStream) -> TokenStream {
     };
 
     let err_ty = match &guard {
-        GuardClosure::Ensure(_) => quote!(prae::ValidationError),
+        GuardClosure::Ensure(_) => quote!(prae::ConstructionError::<#ty>),
         GuardClosure::Validate(ValidateClosure(_, err_ty)) => quote!(#err_ty),
     };
 

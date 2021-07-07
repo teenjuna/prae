@@ -2,38 +2,51 @@ use core::hash::Hash;
 use std::fmt;
 use std::ops::{Deref, Index};
 
-/// Default validation error. It is used for [`define!`](prae_macro::define) macro with `ensure`
-/// keyword.
+/// Used for [`define!`](prae_macro::define) macro with `ensure` keyword.
 #[derive(Clone)]
-pub struct ValidationError {
-    /// The name of the type where this ValidationError originated.
-    source_type: &'static str,
-    /// The human readable message.
-    message: String,
+pub struct ConstructionError<T> 
+where
+    T: fmt::Debug
+{
+    /// The name of the type where this ConstructionError originated.
+    guarded_type_name: String,
+    /// The input value that caused the error.
+    value: T,
 }
 
-/// Commonly used ValidationErrors
-impl ValidationError {
-    /// The input given was empty (whitespace-only strings are considered empty)
-    pub fn new<T>(message: String) -> Self {
-        ValidationError {
-            source_type: std::any::type_name::<T>(),
-            message,
+impl<T> ConstructionError<T> 
+where
+    T: fmt::Debug
+{
+    /// Create a new ConstructionError with the input value that failed.
+    pub fn new(guarded_type_name: &str, value: T) -> Self {
+        ConstructionError {
+            guarded_type_name: guarded_type_name.into(),
+            value,
         }
     }
 }
 
-impl std::error::Error for ValidationError {}
+impl<T> std::error::Error for ConstructionError<T> 
+where
+    T: fmt::Debug
+{}
 
-impl fmt::Debug for ValidationError {
+impl<T> fmt::Debug for ConstructionError<T> 
+where
+    T: fmt::Debug
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.message)
+        write!(f, "failed to create {} from {:?}: provided value is invalid", self.guarded_type_name, self.value)
     }
 }
 
-impl fmt::Display for ValidationError {
+impl<T> fmt::Display for ConstructionError<T> 
+where
+    T: fmt::Debug
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.message)
+        write!(f, "failed to create {} from {:?}: provided value is invalid", self.guarded_type_name, self.value)
     }
 }
 

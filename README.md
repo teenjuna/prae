@@ -47,12 +47,12 @@ let mut u = Username::new(" valid name \n\n").unwrap();
 assert_eq!(u.get(), "valid name"); // now we're talking!
 
 // This also works for mutations:
-assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError)));
+assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ConstructionError<String>)));
 ```
 
 Now our `Username` trims provided value automatically.
 
-You might noticed that `prae::ValidationError` is returned by default when our
+You might noticed that `prae::ConstructionError` is returned by default when our
 construction/mutation fails. Altough it's convenient, there are situations when you might
 want to return a custom error. And `prae` can help with this:
 
