@@ -7,9 +7,9 @@ use std::ops::{Deref, Index};
 #[derive(Clone)]
 pub struct ValidationError {
     /// The name of the type where this ValidationError originated.
-    pub source_type: &'static str,
+    source_type: &'static str,
     /// The human readable message.
-    pub message: &'static str,
+    message: &'static str,
 }
 
 /// Commonly used ValidationErrors
@@ -27,13 +27,13 @@ impl std::error::Error for ValidationError {}
 
 impl fmt::Debug for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "provided value is not valid")
+        writeln!(f, "{}", self.message)
     }
 }
 
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "provided value is not valid")
+        writeln!(f, "{}", self.message)
     }
 }
 
