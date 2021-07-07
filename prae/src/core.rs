@@ -9,13 +9,13 @@ pub struct ValidationError {
     /// The name of the type where this ValidationError originated.
     source_type: &'static str,
     /// The human readable message.
-    message: &'static str,
+    message: String,
 }
 
 /// Commonly used ValidationErrors
 impl ValidationError {
     /// The input given was empty (whitespace-only strings are considered empty)
-    pub fn new<T>(message: &'static str) -> Self {
+    pub fn new<T>(message: String) -> Self {
         ValidationError {
             source_type: std::any::type_name::<T>(),
             message,
