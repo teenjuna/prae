@@ -77,6 +77,8 @@ mod core;
 pub use crate::core::*;
 pub use prae_macro::define;
 
+// We need this to silince the unused_crate_dependencies warning.
+// See: https://github.com/rust-lang/rust/issues/57274
 #[cfg(test)]
 mod test_deps {
     use assert_matches as _;
