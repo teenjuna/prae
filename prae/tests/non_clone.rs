@@ -5,6 +5,6 @@ struct User {
 prae::define! {
     ValidUser: User
     ensure |u| !u.name.is_empty()
-};
+}
 
 
