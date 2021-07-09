@@ -38,11 +38,11 @@
 //! assert_eq!(u.get(), "valid name"); // now we're talking!
 //!
 //! // This also works for mutations:
-//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ConstructionError::<String> { .. })));
+//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError::<String> { .. })));
 //! ```
 //! Now our `Username` trims provided value automatically.
 //!
-//! You might noticed that `prae::ConstructionError::<String>` is returned by default when our
+//! You might noticed that `prae::ValidationError::<String>` is returned by default when our
 //! construction/mutation fails. Altough it's convenient, there are situations when you might
 //! want to return a custom error. And `prae` can help with this:
 //! ```

@@ -11,14 +11,14 @@ prae::define! {
 fn construction_fails_for_invalid_data() {
     assert_matches!(
         Username::new("").unwrap_err(),
-        prae::ConstructionError::<String> { .. }
+        prae::ValidationError::<String> { .. }
     )
 }
 
 #[test]
 fn error_formats_correctly() {
     let error = Username::new("").unwrap_err();
-    let message = format!("{:?}", error);
+    let message = format!("{}", error);
     assert_eq!(message, "failed to create Username from \"\": provided value is invalid");
 }
 
@@ -33,7 +33,7 @@ fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
     assert_matches!(
         un.try_mutate(|u| *u = "".to_owned()).unwrap_err(),
-        prae::ConstructionError::<String> { .. }
+        prae::ValidationError::<String> { .. }
     )
 }
 
