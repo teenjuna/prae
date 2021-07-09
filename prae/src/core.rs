@@ -19,8 +19,8 @@ where
     T: fmt::Debug
 {
     /// Create a new ValidationError with the input value that failed.
-    pub fn new(guarded_type_alias: &'static str, value: T) -> Self {
-        ValidationError { guarded_type_alias, value }
+    pub fn new(guarded_type_name: &'static str, value: T) -> Self {
+        ValidationError { guarded_type_name, value }
     }
 }
 
@@ -37,7 +37,7 @@ where
         write!(
             f,
             "failed to create {} from {:?}: provided value is invalid", 
-            self.guarded_type_alias, 
+            self.guarded_type_name, 
             self.value
         )
     }
