@@ -1,6 +1,8 @@
+use assert_matches::assert_matches;
+
 use prae;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct UsernameError;
 
 prae::define! {
@@ -16,7 +18,7 @@ prae::define! {
 
 #[test]
 fn construction_fails_for_invalid_data() {
-    assert_eq!(Username::new("").unwrap_err(), UsernameError {});
+    assert_matches!(Username::new("").unwrap_err(), UsernameError {});
 }
 
 #[test]
@@ -28,7 +30,7 @@ fn construction_succeeds_for_valid_data() {
 #[test]
 fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
-    assert_eq!(
+    assert_matches!(
         un.try_mutate(|u| *u = "".to_owned()).unwrap_err(),
         UsernameError {}
     );

@@ -38,7 +38,7 @@
 //! assert_eq!(u.get(), "valid name"); // now we're talking!
 //!
 //! // This also works for mutations:
-//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError)));
+//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError { .. })));
 //! ```
 //! Now our `Username` trims provided value automatically.
 //!
@@ -77,8 +77,11 @@ mod core;
 pub use crate::core::*;
 pub use prae_macro::define;
 
+// We need this to silince the unused_crate_dependencies warning.
+// See: https://github.com/rust-lang/rust/issues/57274
 #[cfg(test)]
 mod test_deps {
+    use assert_matches as _;
     use serde as _;
     use serde_json as _;
 }

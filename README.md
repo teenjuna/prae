@@ -47,7 +47,7 @@ let mut u = Username::new(" valid name \n\n").unwrap();
 assert_eq!(u.get(), "valid name"); // now we're talking!
 
 // This also works for mutations:
-assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError)));
+assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError { .. })))
 ```
 
 Now our `Username` trims provided value automatically.

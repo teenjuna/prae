@@ -1,23 +1,32 @@
 use core::hash::Hash;
-use std::fmt;
 use std::ops::{Deref, Index};
+use std::{error::Error, fmt};
 
-/// Default validation error. It is used for [`define!`](prae_macro::define) macro with `ensure`
-/// keyword.
-#[derive(PartialEq)]
-pub struct ValidationError;
+/// Used for [`define!`](prae_macro::define) macro with `ensure` keyword.
+#[derive(Clone, Debug)]
+pub struct ValidationError {
+    /// The name of the type where this error originated.
+    type_name: &'static str,
+    /// Stringified value that caused the error.
+    value: String,
+}
 
-impl std::error::Error for ValidationError {}
-
-impl fmt::Debug for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "provided value is not valid")
+impl ValidationError {
+    /// Create a new error with the input value that failed.
+    pub fn new(type_name: &'static str, value: String) -> Self {
+        ValidationError { type_name, value }
     }
 }
 
+impl Error for ValidationError {}
+
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "provided value is not valid")
+        write!(
+            f,
+            "failed to create {} from value {}: provided value is invalid",
+            self.type_name, self.value,
+        )
     }
 }
 
