@@ -19,7 +19,10 @@ fn construction_fails_for_invalid_data() {
 fn error_formats_correctly() {
     let error = Username::new("").unwrap_err();
     let message = format!("{}", error);
-    assert_eq!(message, "failed to create Username from \"\": provided value is invalid");
+    assert_eq!(
+        message,
+        "failed to create Username from \"\": provided value is invalid"
+    );
 }
 
 #[test]

@@ -1,44 +1,31 @@
 use core::hash::Hash;
-use std::{error::Error, fmt};
 use std::ops::{Deref, Index};
+use std::{error::Error, fmt};
 
 /// Used for [`define!`](prae_macro::define) macro with `ensure` keyword.
 #[derive(Clone, Debug)]
-pub struct ValidationError<T> 
-where
-    T: fmt::Debug
-{
-    /// The name of the type where this ValidationError originated.
-    guarded_type_name: &'static str,
+pub struct ValidationError<T> {
+    /// The name of the type where this error originated.
+    type_name: &'static str,
     /// The input value that caused the error.
-    value: T
+    value: T,
 }
 
-impl<T> ValidationError<T> 
-where
-    T: fmt::Debug
-{
-    /// Create a new ValidationError with the input value that failed.
-    pub fn new(guarded_type_name: &'static str, value: T) -> Self {
-        ValidationError { guarded_type_name, value }
+impl<T> ValidationError<T> {
+    /// Create a new error with the input value that failed.
+    pub fn new(type_name: &'static str, value: T) -> Self {
+        ValidationError { type_name, value }
     }
 }
 
-impl<T> Error for ValidationError<T> 
-where
-    T: fmt::Debug
-{}
+impl<T: fmt::Debug> Error for ValidationError<T> {}
 
-impl<T> fmt::Display for ValidationError<T> 
-where
-    T: fmt::Debug
-{
+impl<T: fmt::Debug> fmt::Display for ValidationError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "failed to create {} from {:?}: provided value is invalid", 
-            self.guarded_type_name, 
-            self.value
+            "failed to create {} from {:?}: provided value is invalid",
+            self.type_name, self.value
         )
     }
 }
