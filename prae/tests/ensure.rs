@@ -21,7 +21,7 @@ fn error_formats_correctly() {
     let message = format!("{}", error);
     assert_eq!(
         message,
-        "failed to create Username: provided value is invalid"
+        "failed to create Username from value \"\": provided value is invalid"
     );
 }
 
