@@ -7,14 +7,13 @@ use std::{error::Error, fmt};
 pub struct ValidationError {
     /// The name of the type where this error originated.
     type_name: &'static str,
-    // Value the failed to invariant.
-    // stringified value, so we can avoid generic T: Clone.
+    /// Stringified value that caused the error.
     value: String,
 }
 
 impl ValidationError {
     /// Create a new error with the input value that failed.
-    pub fn new(type_name: &'static str, value: String ) -> Self {
+    pub fn new(type_name: &'static str, value: String) -> Self {
         ValidationError { type_name, value }
     }
 }
@@ -26,8 +25,7 @@ impl fmt::Display for ValidationError {
         write!(
             f,
             "failed to create {} from value {}: provided value is invalid",
-            self.type_name,
-            self.value,
+            self.type_name, self.value,
         )
     }
 }
