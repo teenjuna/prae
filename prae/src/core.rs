@@ -31,7 +31,7 @@ where
         write!(
             f,
             "failed to create {} from value {:?}: {}",
-            guard_alias_name::<G>(),
+            G::alias_name(),
             self.value,
             self.inner,
         )
@@ -77,7 +77,7 @@ where
         write!(
             f,
             "failed to mutate {} from value {:?} to {:?}: {}",
-            guard_alias_name::<G>(),
+            G::alias_name(),
             self.old_value,
             self.new_value,
             self.inner,
@@ -93,13 +93,6 @@ where
 {
 }
 
-/// Dirty hack to get "Name" instead of "module::NameGuard".
-fn guard_alias_name<G>() -> &'static str {
-    let type_name = std::any::type_name::<G>();
-    let i = type_name.rfind(':').unwrap(); // last occurance of ":" in "some::path::NameGuard"
-    type_name[i + 1..].trim_end_matches("Guard")
-}
-
 /// A trait that represents a guard bound, e.g. a type that is being guarded, `adjust`/`validate`
 /// functions and a possible validation error.
 pub trait Guard {
@@ -113,6 +106,10 @@ pub trait Guard {
     /// A function that validates provided value. If the value
     /// is not valid, it returns `Some(Self::Error)`.
     fn validate(v: &Self::Target) -> Option<Self::Error>;
+    /// Helper method for useful error representation.
+    fn alias_name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 /// A thin wrapper around the underlying type and the [`Guard`](Guard) bounded to it. It guarantees

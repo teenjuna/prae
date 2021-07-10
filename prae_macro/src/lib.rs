@@ -61,6 +61,7 @@ pub fn define(input: TokenStream) -> TokenStream {
             type Error = #err_ty;
             #adjust_fn
             #validate_fn
+            fn alias_name() -> &'static str { stringify!(#ident) }
         }
         #vis type #ident = prae::Guarded<#guard_ident>;
     };
