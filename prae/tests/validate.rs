@@ -44,7 +44,7 @@ fn mutation_error_formats_correctly() {
 #[test]
 fn construction_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
-        Username::new("")?;
+        Username::new("").map_err(|e| e.into_inner())?;
         Ok(())
     }();
 }
@@ -53,7 +53,8 @@ fn construction_error_can_be_transormed_into_inner() {
 fn mutation_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
         let mut un = Username::new("user").unwrap();
-        un.try_mutate(|u| *u = "".to_owned())?;
+        un.try_mutate(|u| *u = "".to_owned())
+            .map_err(|e| e.into_inner())?;
         Ok(())
     }();
 }

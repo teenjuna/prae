@@ -46,7 +46,7 @@
 //! mutation fails. Altough it's convenient, there are situations when you might
 //! want to return a custom error. And `prae` can help with this:
 //! ```
-//! #[derive(Debug)]
+//! #[derive(Debug, PartialEq, Eq)]
 //! pub struct UsernameError;
 //!
 //! prae::define! {
@@ -61,7 +61,10 @@
 //!     }
 //! }
 //!
-//! assert!(matches!(Username::new("  "), Err(UsernameError)));
+//! assert!(matches!(
+//!     Username::new("  "),
+//!     Err(prae::ConstructionError { inner, .. }) if inner == UsernameError {}
+//! ));
 //! ```
 
 #![warn(missing_debug_implementations)]

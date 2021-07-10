@@ -12,6 +12,13 @@ pub struct ConstructionError<G: Guard> {
     pub value: G::Target,
 }
 
+impl<G: Guard> ConstructionError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
+    }
+}
+
 // FIXME: the compiler thinks that `G::Error` can be `ConstructionError<G>`,
 // which conflicts with default implementation From<T> for T.
 // I have no idea how to fix it!
@@ -56,6 +63,13 @@ pub struct MutationError<G: Guard> {
     pub old_value: G::Target,
     /// The value that caused the error.
     pub new_value: G::Target,
+}
+
+impl<G: Guard> MutationError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
+    }
 }
 
 // FIXME: the compiler thinks that `G::Error` can be `MutationError<G>`,
