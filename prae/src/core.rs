@@ -1,33 +1,110 @@
 use core::hash::Hash;
 use std::ops::{Deref, Index};
-use std::{error::Error, fmt};
+use std::{error, fmt};
 
-/// Used for [`define!`](prae_macro::define) macro with `ensure` keyword.
-#[derive(Clone, Debug)]
-pub struct ValidationError {
-    /// The name of the type where this error originated.
-    type_name: &'static str,
-    /// Stringified value that caused the error.
-    value: String,
+/// An error occured during [construction](Guarded::new).
+#[derive(Debug)]
+pub struct ConstructionError<G: Guard> {
+    /// Original error in case of calling [`define!`](prae_macro::define) with `validate` or just a
+    /// string in case of `ensure`.
+    pub inner: G::Error,
+    /// The value that caused the error.
+    pub value: G::Target,
 }
 
-impl ValidationError {
-    /// Create a new error with the input value that failed.
-    pub fn new(type_name: &'static str, value: String) -> Self {
-        ValidationError { type_name, value }
+impl<G: Guard> ConstructionError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
     }
 }
 
-impl Error for ValidationError {}
+// FIXME: the compiler thinks that `G::Error` can be `ConstructionError<G>`,
+// which conflicts with default implementation From<T> for T.
+// I have no idea how to fix it!
+// impl<G: Guard> From<ConstructionError<G>> for G::Error {
+//     fn from(err: ConstructionError<G>) -> Self {
+//         err.inner
+//     }
+// }
 
-impl fmt::Display for ValidationError {
+impl<G: Guard> fmt::Display for ConstructionError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "failed to create {} from value {}: provided value is invalid",
-            self.type_name, self.value,
+            "failed to create {} from value {:?}: {}",
+            G::alias_name(),
+            self.value,
+            self.inner,
         )
     }
+}
+
+impl<G: Guard> error::Error for ConstructionError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
+}
+
+/// An error occured during [mutation](Guarded::try_mutate).
+#[derive(Debug)]
+pub struct MutationError<G: Guard> {
+    /// Original error in case of calling [`define!`](prae_macro::define) with `validate` or just a
+    /// string in case of `ensure`.
+    pub inner: G::Error,
+    /// The value before mutation.
+    pub old_value: G::Target,
+    /// The value that caused the error.
+    pub new_value: G::Target,
+}
+
+impl<G: Guard> MutationError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
+    }
+}
+
+// FIXME: the compiler thinks that `G::Error` can be `MutationError<G>`,
+// which conflicts with default implementation From<T> for T.
+// I have no idea how to fix it!
+// impl<G: Guard> From<MutationError<G>> for G::Error {
+//     fn from(err: MutationError<G>) -> Self {
+//         err.inner
+//     }
+// }
+
+impl<G: Guard> fmt::Display for MutationError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "failed to mutate {} from value {:?} to {:?}: {}",
+            G::alias_name(),
+            self.old_value,
+            self.new_value,
+            self.inner,
+        )
+    }
+}
+
+impl<G: Guard> error::Error for MutationError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
 }
 
 /// A trait that represents a guard bound, e.g. a type that is being guarded, `adjust`/`validate`
@@ -43,6 +120,10 @@ pub trait Guard {
     /// A function that validates provided value. If the value
     /// is not valid, it returns `Some(Self::Error)`.
     fn validate(v: &Self::Target) -> Option<Self::Error>;
+    /// Helper method for useful error representation.
+    fn alias_name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 /// A thin wrapper around the underlying type and the [`Guard`](Guard) bounded to it. It guarantees
@@ -57,11 +138,13 @@ where
 {
     /// Constructor. Will return an error if the provided argument `v`
     /// doesn't pass the validation.
-    pub fn new<V: Into<T>>(v: V) -> Result<Self, E> {
+    pub fn new<V: Into<T>>(v: V) -> Result<Self, ConstructionError<G>> {
         let mut v: T = v.into();
         G::adjust(&mut v);
-        G::validate(&v).map_or(Ok(()), Err)?;
-        Ok(Self(v))
+        match G::validate(&v) {
+            None => Ok(Self(v)),
+            Some(e) => Err(ConstructionError { inner: e, value: v }),
+        }
     }
 
     /// Returns a shared reference to the inner value.
@@ -84,16 +167,24 @@ where
 
     /// Mutates current value using provided closure. Will return an error if
     /// the result of the mutation is invalid.
-    pub fn try_mutate(&mut self, f: impl FnOnce(&mut T)) -> Result<(), E>
+    pub fn try_mutate(&mut self, f: impl FnOnce(&mut T)) -> Result<(), MutationError<G>>
     where
         T: Clone,
     {
         let mut cloned = self.0.clone();
         f(&mut cloned);
         G::adjust(&mut cloned);
-        G::validate(&cloned).map_or(Ok(()), Err)?;
-        self.0 = cloned;
-        Ok(())
+        match G::validate(&cloned) {
+            None => {
+                self.0 = cloned;
+                Ok(())
+            }
+            Some(e) => Err(MutationError {
+                inner: e,
+                old_value: self.0.clone(),
+                new_value: cloned,
+            }),
+        }
     }
 
     /// Retrieve the inner, unprotected value.

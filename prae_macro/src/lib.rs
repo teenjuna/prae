@@ -34,9 +34,9 @@ pub fn define(input: TokenStream) -> TokenStream {
 
     let validate_fn = match &guard {
         GuardClosure::Ensure(EnsureClosure(closure)) => quote! {
-            fn validate(v: &Self::Target) -> Option<prae::ValidationError> {
+            fn validate(v: &Self::Target) -> Option<&'static str> {
                 let f: fn(&Self::Target) -> bool = #closure;
-                if f(v) { None } else { Some(prae::ValidationError::new(stringify!(#ident), format!("{:?}", v))) }
+                if f(v) { None } else { Some("provided value is invalid") }
             }
         },
         GuardClosure::Validate(ValidateClosure(closure, err_ty)) => quote! {
@@ -48,7 +48,7 @@ pub fn define(input: TokenStream) -> TokenStream {
     };
 
     let err_ty = match &guard {
-        GuardClosure::Ensure(_) => quote!(prae::ValidationError),
+        GuardClosure::Ensure(_) => quote!(&'static str),
         GuardClosure::Validate(ValidateClosure(_, err_ty)) => quote!(#err_ty),
     };
 
@@ -61,6 +61,7 @@ pub fn define(input: TokenStream) -> TokenStream {
             type Error = #err_ty;
             #adjust_fn
             #validate_fn
+            fn alias_name() -> &'static str { stringify!(#ident) }
         }
         #vis type #ident = prae::Guarded<#guard_ident>;
     };

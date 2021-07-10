@@ -38,15 +38,15 @@
 //! assert_eq!(u.get(), "valid name"); // now we're talking!
 //!
 //! // This also works for mutations:
-//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::ValidationError { .. })));
+//! assert!(matches!(u.try_mutate(|u| *u = "   ".to_owned()), Err(prae::MutationError { .. })));
 //! ```
 //! Now our `Username` trims provided value automatically.
 //!
-//! You might noticed that `prae::ValidationError` is returned by default when our
-//! construction/mutation fails. Altough it's convenient, there are situations when you might
+//! You might noticed that `prae::MutationError` is returned by default when our
+//! mutation fails. Altough it's convenient, there are situations when you might
 //! want to return a custom error. And `prae` can help with this:
 //! ```
-//! #[derive(Debug)]
+//! #[derive(Debug, PartialEq, Eq)]
 //! pub struct UsernameError;
 //!
 //! prae::define! {
@@ -61,7 +61,10 @@
 //!     }
 //! }
 //!
-//! assert!(matches!(Username::new("  "), Err(UsernameError)));
+//! assert!(matches!(
+//!     Username::new("  "),
+//!     Err(prae::ConstructionError { inner, .. }) if inner == UsernameError {}
+//! ));
 //! ```
 
 #![warn(missing_debug_implementations)]
