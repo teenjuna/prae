@@ -1,33 +1,110 @@
 use core::hash::Hash;
 use std::ops::{Deref, Index};
-use std::{error::Error, fmt};
+use std::{error, fmt};
 
-/// Used for [`define!`](prae_macro::define) macro with `ensure` keyword.
-#[derive(Clone, Debug)]
-pub struct ValidationError {
-    /// The name of the type where this error originated.
-    type_name: &'static str,
-    /// Stringified value that caused the error.
-    value: String,
+/// An error occured during [construction](Guarded::new).
+#[derive(Debug)]
+pub struct ConstructionError<G: Guard> {
+    /// Original error in case of calling [`define!`](prae_macro::define) with `validate` or just a
+    /// string in case of `ensure`.
+    pub inner: G::Error,
+    /// The value that caused the error.
+    pub value: G::Target,
 }
 
-impl ValidationError {
-    /// Create a new error with the input value that failed.
-    pub fn new(type_name: &'static str, value: String) -> Self {
-        ValidationError { type_name, value }
+impl<G: Guard> ConstructionError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
     }
 }
 
-impl Error for ValidationError {}
+// FIXME: the compiler thinks that `G::Error` can be `ConstructionError<G>`,
+// which conflicts with default implementation From<T> for T.
+// I have no idea how to fix it!
+// impl<G: Guard> From<ConstructionError<G>> for G::Error {
+//     fn from(err: ConstructionError<G>) -> Self {
+//         err.inner
+//     }
+// }
 
-impl fmt::Display for ValidationError {
+impl<G: Guard> fmt::Display for ConstructionError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "failed to create {} from value {}: provided value is invalid",
-            self.type_name, self.value,
+            "failed to create {} from value {:?}: {}",
+            G::alias_name(),
+            self.value,
+            self.inner,
         )
     }
+}
+
+impl<G: Guard> error::Error for ConstructionError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
+}
+
+/// An error occured during [mutation](Guarded::try_mutate).
+#[derive(Debug)]
+pub struct MutationError<G: Guard> {
+    /// Original error in case of calling [`define!`](prae_macro::define) with `validate` or just a
+    /// string in case of `ensure`.
+    pub inner: G::Error,
+    /// The value before mutation.
+    pub old_value: G::Target,
+    /// The value that caused the error.
+    pub new_value: G::Target,
+}
+
+impl<G: Guard> MutationError<G> {
+    /// Get inner error.
+    pub fn into_inner(self) -> G::Error {
+        self.inner
+    }
+}
+
+// FIXME: the compiler thinks that `G::Error` can be `MutationError<G>`,
+// which conflicts with default implementation From<T> for T.
+// I have no idea how to fix it!
+// impl<G: Guard> From<MutationError<G>> for G::Error {
+//     fn from(err: MutationError<G>) -> Self {
+//         err.inner
+//     }
+// }
+
+impl<G: Guard> fmt::Display for MutationError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "failed to mutate {} from value {:?} to {:?}: {}",
+            G::alias_name(),
+            self.old_value,
+            self.new_value,
+            self.inner,
+        )
+    }
+}
+
+impl<G: Guard> error::Error for MutationError<G>
+where
+    G::Error: fmt::Debug + fmt::Display,
+    G::Target: fmt::Debug,
+    G: fmt::Debug,
+{
 }
 
 /// A trait that represents a guard bound, e.g. a type that is being guarded, `adjust`/`validate`
@@ -43,6 +120,10 @@ pub trait Guard {
     /// A function that validates provided value. If the value
     /// is not valid, it returns `Some(Self::Error)`.
     fn validate(v: &Self::Target) -> Option<Self::Error>;
+    /// Helper method for useful error representation.
+    fn alias_name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 /// A thin wrapper around the underlying type and the [`Guard`](Guard) bounded to it. It guarantees
@@ -57,11 +138,13 @@ where
 {
     /// Constructor. Will return an error if the provided argument `v`
     /// doesn't pass the validation.
-    pub fn new<V: Into<T>>(v: V) -> Result<Self, E> {
+    pub fn new<V: Into<T>>(v: V) -> Result<Self, ConstructionError<G>> {
         let mut v: T = v.into();
         G::adjust(&mut v);
-        G::validate(&v).map_or(Ok(()), Err)?;
-        Ok(Self(v))
+        match G::validate(&v) {
+            None => Ok(Self(v)),
+            Some(e) => Err(ConstructionError { inner: e, value: v }),
+        }
     }
 
     /// Returns a shared reference to the inner value.
@@ -84,16 +167,24 @@ where
 
     /// Mutates current value using provided closure. Will return an error if
     /// the result of the mutation is invalid.
-    pub fn try_mutate(&mut self, f: impl FnOnce(&mut T)) -> Result<(), E>
+    pub fn try_mutate(&mut self, f: impl FnOnce(&mut T)) -> Result<(), MutationError<G>>
     where
         T: Clone,
     {
         let mut cloned = self.0.clone();
         f(&mut cloned);
         G::adjust(&mut cloned);
-        G::validate(&cloned).map_or(Ok(()), Err)?;
-        self.0 = cloned;
-        Ok(())
+        match G::validate(&cloned) {
+            None => {
+                self.0 = cloned;
+                Ok(())
+            }
+            Some(e) => Err(MutationError {
+                inner: e,
+                old_value: self.0.clone(),
+                new_value: cloned,
+            }),
+        }
     }
 
     /// Retrieve the inner, unprotected value.
@@ -224,7 +315,8 @@ where
 #[cfg(feature = "serde")]
 impl<'de, G: Guard> serde::Deserialize<'de> for Guarded<G>
 where
-    G::Target: serde::Deserialize<'de>,
+    G: fmt::Debug,
+    G::Target: serde::Deserialize<'de> + std::fmt::Debug,
     G::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -232,7 +324,7 @@ where
         D: serde::Deserializer<'de>,
     {
         Self::new(G::Target::deserialize(deserializer)?)
-            .map_err(|e: G::Error| serde::de::Error::custom(e))
+            .map_err(|e: ConstructionError<G>| serde::de::Error::custom(e))
     }
 }
 
@@ -247,101 +339,5 @@ where
         S: serde::Serializer,
     {
         G::Target::serialize(self.get(), serializer)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    mod validate_guard {
-        use crate::core::*;
-
-        #[derive(Debug)]
-        struct UsernameGuard;
-        impl Guard for UsernameGuard {
-            type Target = String;
-            type Error = &'static str;
-            fn adjust(v: &mut Self::Target) {
-                *v = v.trim().to_owned();
-            }
-            fn validate(v: &Self::Target) -> Option<Self::Error> {
-                if v.is_empty() {
-                    Some("username is empty")
-                } else {
-                    None
-                }
-            }
-        }
-        type Username = Guarded<UsernameGuard>;
-
-        #[test]
-        fn construction_with_valid_value_succeeds() {
-            let un = Username::new(" username\n").unwrap();
-            assert_eq!(un.get(), "username");
-        }
-
-        #[test]
-        fn construction_with_invalid_value_fails() {
-            Username::new("   \n").unwrap_err();
-        }
-
-        #[test]
-        fn mutation_with_valid_value_succeeds() {
-            let mut un = Username::new("username").unwrap();
-            un.mutate(|v| *v = format!(" new {}\n", v));
-            assert_eq!(un.get(), "new username");
-        }
-
-        #[test]
-        #[should_panic]
-        fn mutation_with_invalid_value_panics() {
-            let mut un = Username::new("username").unwrap();
-            un.mutate(|v| *v = "   \n".to_owned());
-        }
-
-        #[test]
-        fn falliable_mutation_with_valid_value_succeds() {
-            let mut un = Username::new("username").unwrap();
-            un.try_mutate(|v| *v = format!(" new {}\n", v)).unwrap();
-            assert_eq!(un.get(), "new username");
-        }
-
-        #[test]
-        fn falliable_mutation_with_valid_value_fails() {
-            let mut un = Username::new("username").unwrap();
-            un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
-            assert_eq!(un.get(), "username");
-        }
-
-        #[cfg(feature = "serde")]
-        mod serde {
-            use super::*;
-            use ::serde::{Deserialize, Serialize};
-
-            #[derive(Debug, Deserialize, Serialize)]
-            struct User {
-                username: Username,
-            }
-
-            #[test]
-            fn serialization_succeeds() {
-                let u = User {
-                    username: Username::new("  john doe  ").unwrap(),
-                };
-                let j = serde_json::to_string(&u).unwrap();
-                assert_eq!(j, r#"{"username":"john doe"}"#)
-            }
-
-            #[test]
-            fn deserialization_fails_with_invalid_value() {
-                let e = serde_json::from_str::<User>(r#"{ "username": "  " }"#).unwrap_err();
-                assert_eq!(e.to_string(), "username is empty at line 1 column 20");
-            }
-
-            #[test]
-            fn deserialization_succeeds_with_valid_value() {
-                let u = serde_json::from_str::<User>(r#"{ "username": "  john doe  " }"#).unwrap();
-                assert_eq!(u.username.get(), "john doe");
-            }
-        }
     }
 }

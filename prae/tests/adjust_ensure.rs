@@ -10,10 +10,7 @@ prae::define! {
 
 #[test]
 fn construction_fails_for_invalid_data() {
-    assert_matches!(
-        Username::new("  ").unwrap_err(),
-        prae::ValidationError { .. }
-    )
+    assert_matches!(Username::new("  "), Err(prae::ConstructionError { .. }))
 }
 
 #[test]
@@ -26,8 +23,8 @@ fn construction_succeeds_for_valid_data() {
 fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
     assert_matches!(
-        un.try_mutate(|u| *u = "  ".to_owned()).unwrap_err(),
-        prae::ValidationError { .. }
+        un.try_mutate(|u| *u = "  ".to_owned()),
+        Err(prae::MutationError { .. })
     )
 }
 
