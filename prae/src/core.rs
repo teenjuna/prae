@@ -197,19 +197,19 @@ where
 trait UncheckedAccess {
     /// Construct a value without calling `adjust` and `validate`. The invariant must be upheld
     /// manually. Should be used only for optimisation purposes.
-    pub fn new_unchecked<V: Into<T>>(v: V) -> Self;
+    fn new_unchecked<V: Into<T>>(v: V) -> Self;
 
     /// Mutate a value without calling `adjust` and `validate`. The invariant must be upheld
     /// manually. Should be used only for optimisation purposes.
-    pub fn mutate_unchecked(&mut self, f: impl FnOnce(&mut T));
+    fn mutate_unchecked(&mut self, f: impl FnOnce(&mut T));
 
     /// Gives mutable access to the internals without upholding invariants.
     /// They must continue to be upheld manually while the reference lives!
-    pub fn get_mut(&mut self) -> &mut T;
+    fn get_mut(&mut self) -> &mut T;
 
     /// Verifies invariants. This is guaranteed to succeed unless you've used
     /// one of the `unsafe` methods that require variants to be manually upheld.
-    pub fn verify(&self) -> Result<(), E>;
+    fn verify(&self) -> Result<(), E>;
 }
 
 #[cfg(feature = "unchecked-access")]

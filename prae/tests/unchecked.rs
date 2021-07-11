@@ -11,10 +11,7 @@ fn construction_fails_for_invalid_data_unchecked_succeeds() {
     use assert_matches::assert_matches;
     use prae::UncheckedAccess;
 
-    assert_matches!(
-        Username::new("").unwrap_err(),
-        prae::ValidationError { .. }
-    );
+    assert_matches!(Username::new("").unwrap_err(), prae::ValidationError { .. });
 
     let un = Username::new_unchecked("").unwrap();
     assert_eq!(un.get(), " user ");
@@ -27,10 +24,8 @@ fn mutation_fails_for_invalid_data_unchecked_succeeds() {
     use prae::UncheckedAccess;
 
     let mut un = Username::new("user").unwrap();
-    assert_matches!(
-        un.try_mutate(|u| *u = "".to_owned()).unwrap_err(),
-        prae::ValidationError { .. }
-    );
+    let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
+    assert_matches!(err, prae::ValidationError { .. });
 
     un.mutate_unchecked("").unwrap();
     assert_eq!(un.get(), "");
