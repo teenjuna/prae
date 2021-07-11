@@ -1,49 +1,43 @@
-use prae;
-
-prae::define! {
-    pub Username: String
-    ensure |u| !u.is_empty()
-}
-
-#[test]
 #[cfg(feature = "unchecked-access")]
-fn construction_fails_for_invalid_data_unchecked_succeeds() {
+mod tests {
     use assert_matches::assert_matches;
-    use prae::UncheckedAccess;
 
-    assert_matches!(Username::new("").unwrap_err(), prae::ValidationError { .. });
+    use prae;
 
-    let un = Username::new_unchecked("").unwrap();
-    assert_eq!(un.get(), " user ");
-}
+    prae::define! {
+        pub Username: String
+        ensure |u| !u.is_empty()
+    }
 
-#[test]
-#[cfg(feature = "unchecked-access")]
-fn mutation_fails_for_invalid_data_unchecked_succeeds() {
-    use assert_matches::assert_matches;
-    use prae::UncheckedAccess;
+    #[test]
+    fn construction_fails_for_invalid_data_unchecked_succeeds() {
+        assert_matches!(
+            Username::new("").unwrap_err(),
+            prae::ConstructionError { .. }
+        );
 
-    let mut un = Username::new("user").unwrap();
-    let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
-    assert_matches!(err, prae::ValidationError { .. });
+        let un = Username::new_unchecked("");
+        assert_eq!(un.get(), " user ");
+    }
 
-    un.mutate_unchecked("").unwrap();
-    assert_eq!(un.get(), "");
-}
+    #[test]
+    fn mutation_fails_for_invalid_data_unchecked_succeeds() {
+        let mut un = Username::new("user").unwrap();
+        let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
+        assert_matches!(err, prae::MutationError { .. });
 
-#[test]
-#[cfg(feature = "unchecked-access")]
-fn mutation_fails_for_invalid_data_get_mut_succeeds() {
-    use assert_matches::assert_matches;
-    use prae::UncheckedAccess;
+        un.mutate_unchecked(|u| *u = "".to_owned());
+        assert_eq!(un.get(), "");
+    }
 
-    let mut un = Username::new("user").unwrap();
-    assert_matches!(
-        un.try_mutate(|u| *u = "".to_owned()).unwrap_err(),
-        prae::ValidationError { .. }
-    );
+    #[test]
+    fn mutation_fails_for_invalid_data_get_mut_succeeds() {
+        let mut un = Username::new("user").unwrap();
+        let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
+        assert_matches!(err, prae::MutationError { .. });
 
-    let t = un.get_mut();
-    t = "";
-    assert_eq!(un.get(), "");
+        let t = un.get_mut();
+        *t = "".to_owned();
+        assert_eq!(un.get(), "");
+    }
 }
