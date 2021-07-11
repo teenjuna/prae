@@ -301,7 +301,8 @@ where
 #[cfg(feature = "serde")]
 impl<'de, G: Guard> serde::Deserialize<'de> for Guarded<G>
 where
-    G::Target: serde::Deserialize<'de>,
+    G: fmt::Debug,
+    G::Target: serde::Deserialize<'de> + std::fmt::Debug,
     G::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -309,7 +310,7 @@ where
         D: serde::Deserializer<'de>,
     {
         Self::new(G::Target::deserialize(deserializer)?)
-            .map_err(|e: G::Error| serde::de::Error::custom(e))
+            .map_err(|e: ConstructionError<G>| serde::de::Error::custom(e))
     }
 }
 
@@ -324,101 +325,5 @@ where
         S: serde::Serializer,
     {
         G::Target::serialize(self.get(), serializer)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    mod validate_guard {
-        use crate::core::*;
-
-        #[derive(Debug)]
-        struct UsernameGuard;
-        impl Guard for UsernameGuard {
-            type Target = String;
-            type Error = &'static str;
-            fn adjust(v: &mut Self::Target) {
-                *v = v.trim().to_owned();
-            }
-            fn validate(v: &Self::Target) -> Option<Self::Error> {
-                if v.is_empty() {
-                    Some("username is empty")
-                } else {
-                    None
-                }
-            }
-        }
-        type Username = Guarded<UsernameGuard>;
-
-        #[test]
-        fn construction_with_valid_value_succeeds() {
-            let un = Username::new(" username\n").unwrap();
-            assert_eq!(un.get(), "username");
-        }
-
-        #[test]
-        fn construction_with_invalid_value_fails() {
-            Username::new("   \n").unwrap_err();
-        }
-
-        #[test]
-        fn mutation_with_valid_value_succeeds() {
-            let mut un = Username::new("username").unwrap();
-            un.mutate(|v| *v = format!(" new {}\n", v));
-            assert_eq!(un.get(), "new username");
-        }
-
-        #[test]
-        #[should_panic]
-        fn mutation_with_invalid_value_panics() {
-            let mut un = Username::new("username").unwrap();
-            un.mutate(|v| *v = "   \n".to_owned());
-        }
-
-        #[test]
-        fn falliable_mutation_with_valid_value_succeds() {
-            let mut un = Username::new("username").unwrap();
-            un.try_mutate(|v| *v = format!(" new {}\n", v)).unwrap();
-            assert_eq!(un.get(), "new username");
-        }
-
-        #[test]
-        fn falliable_mutation_with_valid_value_fails() {
-            let mut un = Username::new("username").unwrap();
-            un.try_mutate(|v| *v = "   \n".to_owned()).unwrap_err();
-            assert_eq!(un.get(), "username");
-        }
-
-        #[cfg(feature = "serde")]
-        mod serde {
-            use super::*;
-            use ::serde::{Deserialize, Serialize};
-
-            #[derive(Debug, Deserialize, Serialize)]
-            struct User {
-                username: Username,
-            }
-
-            #[test]
-            fn serialization_succeeds() {
-                let u = User {
-                    username: Username::new("  john doe  ").unwrap(),
-                };
-                let j = serde_json::to_string(&u).unwrap();
-                assert_eq!(j, r#"{"username":"john doe"}"#)
-            }
-
-            #[test]
-            fn deserialization_fails_with_invalid_value() {
-                let e = serde_json::from_str::<User>(r#"{ "username": "  " }"#).unwrap_err();
-                assert_eq!(e.to_string(), "username is empty at line 1 column 20");
-            }
-
-            #[test]
-            fn deserialization_succeeds_with_valid_value() {
-                let u = serde_json::from_str::<User>(r#"{ "username": "  john doe  " }"#).unwrap();
-                assert_eq!(u.username.get(), "john doe");
-            }
-        }
     }
 }
