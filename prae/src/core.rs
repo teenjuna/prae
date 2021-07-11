@@ -191,10 +191,17 @@ where
     pub fn into_inner(self) -> T {
         self.0
     }
+}
 
+#[cfg(feature = "unchecked-access")]
+impl<T, E, G> Guarded<G>
+where
+    E: fmt::Debug,
+    G: Guard<Target = T, Error = E>,
+{
     /// Construct a value without calling `adjust` and `validate`. The invariant must be upheld
     /// manually. Should be used only for optimisation purposes.
-    pub unsafe fn new_manual<V: Into<T>>(v: V) -> Self {
+    pub fn new_unchecked<V: Into<T>>(v: V) -> Self {
         let v: T = v.into();
         debug_assert!(G::validate(&v).is_none());
         Self(v)
@@ -202,19 +209,19 @@ where
 
     /// Mutate a value without calling `adjust` and `validate`. The invariant must be upheld
     /// manually. Should be used only for optimisation purposes.
-    pub unsafe fn mutate_manual(&mut self, f: impl FnOnce(&mut T)) {
+    pub fn mutate_unchecked(&mut self, f: impl FnOnce(&mut T)) {
         f(&mut self.0);
         debug_assert!(G::validate(&self.0).is_none());
     }
 
     /// Gives mutable access to the internals without upholding invariants.
     /// They must continue to be upheld manually while the reference lives!
-    pub unsafe fn get_mut(&mut self) -> &mut T {
+    pub fn get_mut(&mut self) -> &mut T {
         &mut self.0
     }
 
     /// Verifies invariants. This is guaranteed to succeed unless you've used
-    /// one of the `unsafe` methods that require variants to be manually upheld.
+    /// one of the `*_unchecked` methods that require variants to be manually upheld.
     pub fn verify(&self) -> Result<(), E> {
         G::validate(&self.0).map_or(Ok(()), Err)
     }
