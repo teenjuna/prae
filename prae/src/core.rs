@@ -138,8 +138,6 @@ impl UncheckedAccess for Guard {
         &mut self.0
     }
 
-    /// Verifies invariants. This is guaranteed to succeed unless you've used
-    /// one of the `unsafe` methods that require variants to be manually upheld.
     fn verify(&self) -> Result<(), E> {
         G::validate(&self.0).map_or(Ok(()), Err)
     }
