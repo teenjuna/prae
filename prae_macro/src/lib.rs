@@ -33,13 +33,18 @@ pub fn define(input: TokenStream) -> TokenStream {
     };
 
     let validate_fn = match &guard {
-        GuardClosure::Ensure(EnsureClosure(closure)) => quote! {
+        None => quote! {
+            fn validate(v: &Self::Target) -> Option<()> {
+                None
+            }
+        },
+        Some(GuardClosure::Ensure(EnsureClosure(closure))) => quote! {
             fn validate(v: &Self::Target) -> Option<&'static str> {
                 let f: fn(&Self::Target) -> bool = #closure;
                 if f(v) { None } else { Some("provided value is invalid") }
             }
         },
-        GuardClosure::Validate(ValidateClosure(closure, err_ty)) => quote! {
+        Some(GuardClosure::Validate(ValidateClosure(closure, err_ty))) => quote! {
             fn validate(v: &Self::Target) -> Option<#err_ty> {
                 let f: fn(&Self::Target) -> Option<#err_ty> = #closure;
                 f(v)
@@ -48,8 +53,9 @@ pub fn define(input: TokenStream) -> TokenStream {
     };
 
     let err_ty = match &guard {
-        GuardClosure::Ensure(_) => quote!(&'static str),
-        GuardClosure::Validate(ValidateClosure(_, err_ty)) => quote!(#err_ty),
+        None => quote!(()),
+        Some(GuardClosure::Ensure(_)) => quote!(&'static str),
+        Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
     };
 
     let guard_ident = format_ident!("{}Guard", ident);
@@ -74,7 +80,7 @@ struct Define {
     ident: Ident,
     ty: Type,
     adjust: Option<AdjustClosure>,
-    guard: GuardClosure,
+    guard: Option<GuardClosure>,
 }
 
 impl Parse for Define {
@@ -91,13 +97,20 @@ impl Parse for Define {
         // Parse guard closure (it must exist).
         let guard = parse_guard_closure_for_ty(&ty, input)?;
 
-        Ok(Define {
-            vis,
-            ident,
-            ty,
-            adjust,
-            guard,
-        })
+        if adjust.is_none() && guard.is_none() {
+            Err(Error::new(
+                input.span(),
+                "neither `adjust` nor `ensure`/`validate` closures were given",
+            ))
+        } else {
+            Ok(Define {
+                vis,
+                ident,
+                ty,
+                adjust,
+                guard,
+            })
+        }
     }
 }
 
@@ -155,21 +168,18 @@ enum GuardClosure {
     Validate(ValidateClosure),
 }
 
-fn parse_guard_closure_for_ty(ty: &Type, input: ParseStream) -> Result<GuardClosure> {
+fn parse_guard_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Option<GuardClosure>> {
     let lk = input.lookahead1();
     if lk.peek(kw::ensure) {
-        Ok(GuardClosure::Ensure(parse_ensure_closure_for_ty(
+        Ok(Some(GuardClosure::Ensure(parse_ensure_closure_for_ty(
             ty, input,
-        )?))
+        )?)))
     } else if lk.peek(kw::validate) {
-        Ok(GuardClosure::Validate(parse_validate_closure_for_ty(
+        Ok(Some(GuardClosure::Validate(parse_validate_closure_for_ty(
             ty, input,
-        )?))
+        )?)))
     } else {
-        Err(Error::new(
-            input.span(),
-            "expected `ensure` or `validate` after `adjust`",
-        ))
+        Ok(None)
     }
 }
 
