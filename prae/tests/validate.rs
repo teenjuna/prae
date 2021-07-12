@@ -13,11 +13,11 @@ impl std::fmt::Display for UsernameError {
 
 prae::define! {
     pub Username: String
-    validate |u| -> Option<UsernameError> {
+    validate |u| -> Result<(), UsernameError> {
         if u.is_empty() {
-            Some(UsernameError{})
+            Err(UsernameError{})
         } else {
-            None
+            Ok(())
         }
     }
 }

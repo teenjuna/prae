@@ -4,7 +4,7 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Result, Token, Type, TypePath,
+    Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Token, Type, TypePath,
     Visibility,
 };
 
@@ -32,30 +32,30 @@ pub fn define(input: TokenStream) -> TokenStream {
         },
     };
 
-    let validate_fn = match &guard {
-        None => quote! {
-            fn validate(v: &Self::Target) -> Option<()> {
-                None
-            }
-        },
-        Some(GuardClosure::Ensure(EnsureClosure(closure))) => quote! {
-            fn validate(v: &Self::Target) -> Option<&'static str> {
-                let f: fn(&Self::Target) -> bool = #closure;
-                if f(v) { None } else { Some("provided value is invalid") }
-            }
-        },
-        Some(GuardClosure::Validate(ValidateClosure(closure, err_ty))) => quote! {
-            fn validate(v: &Self::Target) -> Option<#err_ty> {
-                let f: fn(&Self::Target) -> Option<#err_ty> = #closure;
-                f(v)
-            }
-        },
-    };
-
     let err_ty = match &guard {
         None => quote!(()),
         Some(GuardClosure::Ensure(_)) => quote!(&'static str),
         Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
+    };
+
+    let validate_fn = match &guard {
+        None => quote! {
+            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
+                Ok(())
+            }
+        },
+        Some(GuardClosure::Ensure(EnsureClosure(closure))) => quote! {
+            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
+                let f: fn(&Self::Target) -> bool = #closure;
+                if f(v) { Ok(()) } else { Err("provided value is invalid") }
+            }
+        },
+        Some(GuardClosure::Validate(ValidateClosure(closure, err_ty))) => quote! {
+            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
+                let f: fn(&Self::Target) -> Result<(), #err_ty> = #closure;
+                f(v)
+            }
+        },
     };
 
     let guard_ident = format_ident!("{}Guard", ident);
@@ -84,7 +84,7 @@ struct Define {
 }
 
 impl Parse for Define {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse type definition.
         let vis: Visibility = input.parse()?;
         let ident: Ident = input.parse()?;
@@ -117,7 +117,7 @@ impl Parse for Define {
 // Closure that takes one argument by mutable reference and returns nothing.
 struct AdjustClosure(ExprClosure);
 
-fn parse_adjust_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Option<AdjustClosure>> {
+fn parse_adjust_closure_for_ty(ty: &Type, input: ParseStream) -> syn::Result<Option<AdjustClosure>> {
     // If there's no `adjust` keyword, return None.
     if !input.lookahead1().peek(kw::adjust) {
         return Ok(None);
@@ -168,7 +168,7 @@ enum GuardClosure {
     Validate(ValidateClosure),
 }
 
-fn parse_guard_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Option<GuardClosure>> {
+fn parse_guard_closure_for_ty(ty: &Type, input: ParseStream) -> syn::Result<Option<GuardClosure>> {
     let lk = input.lookahead1();
     if lk.peek(kw::ensure) {
         Ok(Some(GuardClosure::Ensure(parse_ensure_closure_for_ty(
@@ -188,7 +188,7 @@ fn parse_guard_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Option<Gu
 // doesn't.
 struct EnsureClosure(ExprClosure);
 
-fn parse_ensure_closure_for_ty(ty: &Type, input: ParseStream) -> Result<EnsureClosure> {
+fn parse_ensure_closure_for_ty(ty: &Type, input: ParseStream) -> syn::Result<EnsureClosure> {
     // Parse the closure.
     input.parse::<kw::ensure>()?;
     let closure: ExprClosure = input.parse()?;
@@ -235,7 +235,7 @@ fn parse_ensure_closure_for_ty(ty: &Type, input: ParseStream) -> Result<EnsureCl
 // doesn't.
 struct ValidateClosure(ExprClosure, GenericArgument);
 
-fn parse_validate_closure_for_ty(ty: &Type, input: ParseStream) -> Result<ValidateClosure> {
+fn parse_validate_closure_for_ty(ty: &Type, input: ParseStream) -> syn::Result<ValidateClosure> {
     // Parse the closure.
     input.parse::<kw::validate>()?;
     let closure: ExprClosure = input.parse()?;
@@ -264,15 +264,15 @@ fn parse_validate_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Valida
         }
     }
 
-    // Validate the output of the closure. It must return `Option<E>`.
+    // Validate the output of the closure. It must return `Result<(), E>`.
     // Otherwise we won't be able to extract the error type `E`.
     let mut err_type: Option<GenericArgument> = None;
     if let syn::ReturnType::Type(_, ret_type) = &closure.output {
         if let Type::Path(TypePath { path, .. }) = ret_type.as_ref() {
             let seg = path.segments.first().unwrap(); // is it safe?
-            if let "Option" | "std::option::Option" = seg.ident.to_string().as_str() {
+            if let "Result" | "std::result::Result" = seg.ident.to_string().as_str() {
                 if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    err_type = Some(ab.args.first().unwrap().clone())
+                    err_type = Some(ab.args.last().unwrap().clone())
                 }
             }
         }
@@ -280,7 +280,7 @@ fn parse_validate_closure_for_ty(ty: &Type, input: ParseStream) -> Result<Valida
     if err_type.is_none() {
         return Err(Error::new(
             closure.span(),
-            "closure specify return type Option<...>",
+            "closure specify return type Result<(), E>",
         ));
     }
 
