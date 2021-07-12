@@ -4,8 +4,7 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Token, Type, TypePath,
-    Visibility,
+    Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Token, Type, TypePath, Visibility,
 };
 
 /// Convenience macro that defines a guarded type that promises to be
@@ -117,7 +116,10 @@ impl Parse for Define {
 // Closure that takes one argument by mutable reference and returns nothing.
 struct AdjustClosure(ExprClosure);
 
-fn parse_adjust_closure_for_ty(ty: &Type, input: ParseStream) -> syn::Result<Option<AdjustClosure>> {
+fn parse_adjust_closure_for_ty(
+    ty: &Type,
+    input: ParseStream,
+) -> syn::Result<Option<AdjustClosure>> {
     // If there's no `adjust` keyword, return None.
     if !input.lookahead1().peek(kw::adjust) {
         return Ok(None);

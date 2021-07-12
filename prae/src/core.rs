@@ -144,7 +144,7 @@ where
 
         match G::validate(&v) {
             Ok(_) => Ok(Self(v)),
-            Err(e) => Err(ConstructionError { inner: e, value: v })
+            Err(e) => Err(ConstructionError { inner: e, value: v }),
         }
     }
 
