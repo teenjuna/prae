@@ -119,7 +119,7 @@ pub trait Guard {
     fn adjust(v: &mut Self::Target);
     /// A function that validates provided value. If the value
     /// is not valid, it returns `Some(Self::Error)`.
-    fn validate(v: &Self::Target) -> Option<Self::Error>;
+    fn validate(v: &Self::Target) -> Result<(), Self::Error>;
     /// Helper method for useful error representation.
     fn alias_name() -> &'static str {
         std::any::type_name::<Self>()
@@ -141,9 +141,10 @@ where
     pub fn new<V: Into<T>>(v: V) -> Result<Self, ConstructionError<G>> {
         let mut v: T = v.into();
         G::adjust(&mut v);
+
         match G::validate(&v) {
-            None => Ok(Self(v)),
-            Some(e) => Err(ConstructionError { inner: e, value: v }),
+            Ok(_) => Ok(Self(v)),
+            Err(e) => Err(ConstructionError { inner: e, value: v }),
         }
     }
 
@@ -160,8 +161,8 @@ where
         // We have to match here because Option.expect_none is unstable.
         // See: https://github.com/rust-lang/rust/issues/62633
         match G::validate(&self.0) {
-            None => {}
-            Some(e) => panic!("validation failed with error {:?}", e),
+            Ok(_) => {}
+            Err(e) => panic!("validation failed with error {:?}", e),
         };
     }
 
@@ -175,11 +176,11 @@ where
         f(&mut cloned);
         G::adjust(&mut cloned);
         match G::validate(&cloned) {
-            None => {
+            Ok(()) => {
                 self.0 = cloned;
                 Ok(())
             }
-            Some(e) => Err(MutationError {
+            Err(e) => Err(MutationError {
                 inner: e,
                 old_value: self.0.clone(),
                 new_value: cloned,
@@ -203,7 +204,7 @@ where
     /// manually. Should be used only for optimisation purposes.
     pub fn new_unchecked<V: Into<T>>(v: V) -> Self {
         let v: T = v.into();
-        debug_assert!(G::validate(&v).is_none());
+        debug_assert!(G::validate(&v).is_ok());
         Self(v)
     }
 
@@ -211,7 +212,7 @@ where
     /// manually. Should be used only for optimisation purposes.
     pub fn mutate_unchecked(&mut self, f: impl FnOnce(&mut T)) {
         f(&mut self.0);
-        debug_assert!(G::validate(&self.0).is_none());
+        debug_assert!(G::validate(&self.0).is_ok());
     }
 
     /// Gives mutable access to the internals without upholding invariants.
@@ -223,7 +224,7 @@ where
     /// Verifies invariants. This is guaranteed to succeed unless you've used
     /// one of the `*_unchecked` methods that require variants to be manually upheld.
     pub fn verify(&self) -> Result<(), E> {
-        G::validate(&self.0).map_or(Ok(()), Err)
+        G::validate(&self.0)
     }
 }
 
