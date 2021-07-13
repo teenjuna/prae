@@ -52,11 +52,11 @@
 //! prae::define! {
 //!     pub Username: String
 //!     adjust   |u| *u = u.trim().to_string()
-//!     validate |u| -> Option<UsernameError> {
+//!     validate |u| -> Result<(), UsernameError> {
 //!         if u.is_empty() {
-//!             Some(UsernameError)
+//!             Err(UsernameError)
 //!         } else {
-//!             None
+//!             Ok(())
 //!         }
 //!     }
 //! }
