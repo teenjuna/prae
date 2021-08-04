@@ -1,8 +1,6 @@
-#[cfg(feature = "unchecked-access")]
+#[cfg(feature = "unchecked")]
 mod tests {
-    use assert_matches::assert_matches;
-
-    use prae;
+    use prae::Guard;
 
     prae::define! {
         pub Username: String
@@ -10,34 +8,28 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn construction_fails_for_invalid_data_unchecked_succeeds() {
-        assert_matches!(
-            Username::new("").unwrap_err(),
-            prae::ConstructionError { .. }
-        );
-
-        Username::new_unchecked("");
+    fn unchecked_construction_never_fails() {
+        let u = Username::new_unchecked("lala");
+        assert_eq!(u.get(), "lala");
+        let u = Username::new_unchecked("");
+        assert_eq!(u.get(), "");
     }
 
     #[test]
-    #[should_panic]
-    fn mutation_fails_for_invalid_data_unchecked_succeeds() {
-        let mut un = Username::new("user").unwrap();
-        let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
-        assert_matches!(err, prae::MutationError { .. });
-
-        un.mutate_unchecked(|u| *u = "".to_owned());
+    fn unchecked_mutation_never_fails() {
+        let mut u = Username::new_unchecked("lala");
+        u.mutate_unchecked(|u| *u = "lolo".to_owned());
+        assert_eq!(u.get(), "lolo");
+        u.mutate_unchecked(|u| *u = "".to_owned());
+        assert_eq!(u.get(), "");
     }
 
     #[test]
-    fn mutation_fails_for_invalid_data_get_mut_succeeds() {
-        let mut un = Username::new("user").unwrap();
-        let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
-        assert_matches!(err, prae::MutationError { .. });
-
-        let t = un.get_mut();
-        *t = "".to_owned();
-        assert_eq!(un.get(), "");
+    fn get_mut_works() {
+        let mut u = Username::new_unchecked("lala");
+        *u.get_mut() = "lolo".to_owned();
+        assert_eq!(u.get(), "lolo");
+        *u.get_mut() = "".to_owned();
+        assert_eq!(u.get(), "");
     }
 }

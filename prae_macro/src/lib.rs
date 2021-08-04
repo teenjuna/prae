@@ -19,15 +19,11 @@ pub fn define(input: TokenStream) -> TokenStream {
         guard,
     } = parse_macro_input!(input as Define);
 
-    let adjust_fn = match adjust {
-        None => quote! {
-            fn adjust(v: &mut Self::Target) {}
-        },
+    let adjust_part = match adjust {
+        None => quote! {},
         Some(AdjustClosure(closure)) => quote! {
-            fn adjust(v: &mut Self::Target) {
-                let adjust: fn(&mut Self::Target) = #closure;
-                adjust(v);
-            }
+            let adjust: fn(&mut Self::Target) = #closure;
+            adjust(v);
         },
     };
 
@@ -37,38 +33,31 @@ pub fn define(input: TokenStream) -> TokenStream {
         Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
     };
 
-    let validate_fn = match &guard {
-        None => quote! {
-            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
-                Ok(())
-            }
-        },
+    let validate_part = match &guard {
+        None => quote! { Ok(()) },
         Some(GuardClosure::Ensure(EnsureClosure(closure))) => quote! {
-            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
-                let f: fn(&Self::Target) -> bool = #closure;
-                if f(v) { Ok(()) } else { Err("provided value is invalid") }
-            }
+                let is_valid: fn(&Self::Target) -> bool = #closure;
+                if is_valid(v) { Ok(()) } else { Err("provided value is invalid") }
         },
-        Some(GuardClosure::Validate(ValidateClosure(closure, err_ty))) => quote! {
-            fn validate(v: &Self::Target) -> Result<(), #err_ty> {
-                let f: fn(&Self::Target) -> Result<(), #err_ty> = #closure;
-                f(v)
-            }
+        Some(GuardClosure::Validate(ValidateClosure(closure, _))) => quote! {
+                let validate: fn(&Self::Target) -> Result<(), #err_ty> = #closure;
+                validate(v)
         },
     };
 
-    let guard_ident = format_ident!("{}Guard", ident);
+    let bound_ident = format_ident!("{}Bound", ident);
     let output = quote! {
        #[derive(Debug)]
-        #vis struct #guard_ident;
-        impl prae::Guard for #guard_ident {
+        #vis struct #bound_ident;
+        impl prae::Bound for #bound_ident {
             type Target = #ty;
             type Error = #err_ty;
-            #adjust_fn
-            #validate_fn
-            fn alias_name() -> &'static str { stringify!(#ident) }
+            fn apply(v: &mut Self::Target) -> Result<(), Self::Error> {
+                #adjust_part
+                #validate_part
+            }
         }
-        #vis type #ident = prae::Guarded<#guard_ident>;
+        #vis type #ident = prae::Guarded<#bound_ident>;
     };
 
     TokenStream::from(output)

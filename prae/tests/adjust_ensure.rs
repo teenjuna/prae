@@ -1,6 +1,5 @@
 use assert_matches::assert_matches;
-
-use prae;
+use prae::Guard;
 
 prae::define! {
     pub Username: String

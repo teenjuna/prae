@@ -1,6 +1,5 @@
 use assert_matches::assert_matches;
-
-use prae;
+use prae::Guard;
 
 #[derive(Debug)]
 pub struct UsernameError;

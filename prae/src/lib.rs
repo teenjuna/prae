@@ -4,6 +4,8 @@
 //! # Examples
 //! Let's create a `Username` type. It will be a wrapper around non-empty `String`:
 //! ```
+//! use prae::Guard;
+//!
 //! prae::define!(pub Username: String ensure |u| !u.is_empty());
 //!
 //! // We can't create an invalid username.
@@ -28,6 +30,8 @@
 //! can of course do something like `Username::new(s.trim())` every time, but why should
 //! we do it ourselves? Let's automate it!
 //! ```
+//! use prae::Guard;
+//!
 //! prae::define! {
 //!     pub Username: String
 //!     adjust |u| *u = u.trim().to_string()
@@ -46,6 +50,8 @@
 //! mutation fails. Altough it's convenient, there are situations when you might
 //! want to return a custom error. And `prae` can help with this:
 //! ```
+//! use prae::Guard;
+//!
 //! #[derive(Debug, PartialEq, Eq)]
 //! pub struct UsernameError;
 //!

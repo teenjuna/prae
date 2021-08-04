@@ -1,3 +1,5 @@
+use prae::Guard;
+
 prae::define! {
     Username: String
     adjust |u| *u = u.trim().to_owned()
