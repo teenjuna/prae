@@ -11,6 +11,16 @@ use syn::{
 /// always valid. It may be used in different ways, see examples section for details.
 #[proc_macro]
 pub fn define(input: TokenStream) -> TokenStream {
+    define_impl(input, false)
+}
+
+/// Like [`define!`](define!), but for extending of existing guard.
+#[proc_macro]
+pub fn extend(input: TokenStream) -> TokenStream {
+    define_impl(input, true)
+}
+
+fn define_impl(input: TokenStream, is_extend: bool) -> TokenStream {
     let Define {
         vis,
         ident,
@@ -18,6 +28,12 @@ pub fn define(input: TokenStream) -> TokenStream {
         adjust,
         guard,
     } = parse_macro_input!(input as Define);
+
+    let extend_part = if is_extend {
+        quote!(<<#ty as prae::Guard>::Bound as prae::Bound>::apply(v)?;)
+    } else {
+        quote!()
+    };
 
     let adjust_part = match adjust {
         None => quote! {},
@@ -27,22 +43,29 @@ pub fn define(input: TokenStream) -> TokenStream {
         },
     };
 
-    let err_ty = match &guard {
-        None => quote!(()),
-        Some(GuardClosure::Ensure(_)) => quote!(&'static str),
-        Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
-    };
-
     let validate_part = match &guard {
         None => quote! { Ok(()) },
         Some(GuardClosure::Ensure(EnsureClosure(closure))) => quote! {
                 let is_valid: fn(&Self::Target) -> bool = #closure;
                 if is_valid(v) { Ok(()) } else { Err("provided value is invalid") }
         },
-        Some(GuardClosure::Validate(ValidateClosure(closure, _))) => quote! {
+        Some(GuardClosure::Validate(ValidateClosure(closure, err_ty))) => quote! {
                 let validate: fn(&Self::Target) -> Result<(), #err_ty> = #closure;
                 validate(v)
         },
+    };
+
+    let inner_ty = if is_extend {
+        quote!(<<#ty as prae::Guard>::Bound as prae::Bound>::Target)
+    } else {
+        quote!(#ty)
+    };
+
+    let err_ty = match &guard {
+        None if is_extend => quote!(<<#ty as prae::Guard>::Bound as prae::Bound>::Error),
+        None => quote!(()),
+        Some(GuardClosure::Ensure(_)) => quote!(&'static str),
+        Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
     };
 
     let bound_ident = format_ident!("{}Bound", ident);
@@ -50,9 +73,10 @@ pub fn define(input: TokenStream) -> TokenStream {
        #[derive(Debug)]
         #vis struct #bound_ident;
         impl prae::Bound for #bound_ident {
-            type Target = #ty;
+            type Target = #inner_ty;
             type Error = #err_ty;
             fn apply(v: &mut Self::Target) -> Result<(), Self::Error> {
+                #extend_part
                 #adjust_part
                 #validate_part
             }
