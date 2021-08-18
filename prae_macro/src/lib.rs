@@ -4,7 +4,8 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Token, Type, TypePath, Visibility,
+    Attribute, Error, ExprClosure, GenericArgument, Ident, Pat, PatType, Token, Type, TypePath,
+    Visibility,
 };
 
 /// Convenience macro that defines a guarded type that promises to be
@@ -22,6 +23,7 @@ pub fn extend(input: TokenStream) -> TokenStream {
 
 fn define_impl(input: TokenStream, is_extend: bool) -> TokenStream {
     let Define {
+        attrs,
         vis,
         ident,
         ty,
@@ -68,9 +70,25 @@ fn define_impl(input: TokenStream, is_extend: bool) -> TokenStream {
         Some(GuardClosure::Validate(ValidateClosure(_, err_ty))) => quote!(#err_ty),
     };
 
+    // Convert provided attributes to token stream.
+    // This is particularly useful for documentation.
+    let attrs = {
+        use quote::TokenStreamExt;
+        let mut ts = proc_macro2::TokenStream::new();
+        ts.append_all(attrs);
+        ts
+    };
+
+    // Generate a doc comment for the bound.
+    let bound_doc = format!(
+        " The bound for [`{0}`]({0}). Shouldn't be used directly.",
+        ident
+    );
+
     let bound_ident = format_ident!("{}Bound", ident);
     let output = quote! {
-       #[derive(Debug)]
+        #[doc = #bound_doc]
+        #[derive(Debug)]
         #vis struct #bound_ident;
         impl prae::Bound for #bound_ident {
             type Target = #inner_ty;
@@ -81,6 +99,7 @@ fn define_impl(input: TokenStream, is_extend: bool) -> TokenStream {
                 #validate_part
             }
         }
+        #attrs
         #vis type #ident = prae::Guarded<#bound_ident>;
     };
 
@@ -88,6 +107,7 @@ fn define_impl(input: TokenStream, is_extend: bool) -> TokenStream {
 }
 
 struct Define {
+    attrs: Vec<Attribute>,
     vis: Visibility,
     ident: Ident,
     ty: Type,
@@ -97,6 +117,8 @@ struct Define {
 
 impl Parse for Define {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse attributes.
+        let attrs = input.call(Attribute::parse_outer)?;
         // Parse type definition.
         let vis: Visibility = input.parse()?;
         let ident: Ident = input.parse()?;
@@ -116,6 +138,7 @@ impl Parse for Define {
             ))
         } else {
             Ok(Define {
+                attrs,
                 vis,
                 ident,
                 ty,
