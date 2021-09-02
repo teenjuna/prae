@@ -1,4 +1,4 @@
-use core::hash::Hash;
+use std::hash::Hash;
 use std::ops::{Deref, Index};
 use std::{error, fmt};
 

@@ -9,7 +9,7 @@ use syn::{
 };
 
 /// Convenience macro that defines a guarded type that promises to be
-/// always valid. It may be used in different ways, see examples section for details.
+/// always valid. It may be used in different ways, see the examples for details.
 #[proc_macro]
 pub fn define(input: TokenStream) -> TokenStream {
     define_impl(input, false)
