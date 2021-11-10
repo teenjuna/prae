@@ -1,29 +1,8 @@
 [package]
 name = "prae"
-version = "0.6.0"
-authors = ["Alex Ryapolov <ryapolov@pm.me>"]
-edition = "2018"
-license = "Unlicense"
-description = "Define types that promise to be always valid"
-documentation = "https://docs.rs/prae"
-readme = "../README.md"
-repository = "https://github.com/teenjuna/prae"
-keywords = ["validation", "macro", "invariant", "generation"]
-categories = ["development-tools"]
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-prae_macro = { version = "0.4", path = "../prae_macro" }
-serde = { version = "1.0", optional = true }
-
-[dev-dependencies]
-assert_matches = "1.5"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-[features]
-default = []
-unchecked = []
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
