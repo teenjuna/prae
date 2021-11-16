@@ -8,6 +8,7 @@ default = []
 unprocessed = []
 
 [dependencies]
+prae-macro = { version = "0.1", path = "../prae-macro" }
 
 [package.metadata.docs.rs]
 all-features = true
