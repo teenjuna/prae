@@ -1,6 +1,6 @@
 [package]
 name = "prae_macro"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "Unlicense"
 description = "Proc macro for `prae` crate"

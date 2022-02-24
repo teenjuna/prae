@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! # What is `prae`?
 //!
 //! This crate aims to provide a better way to define types that require

@@ -19,7 +19,7 @@ For example, suppose you want to create a `Username` type. You want this
 type to be a string, and you don't want it to be empty. Traditionally, would
 create a wrapper struct with getter and setter functions, like this
 simplified example:
-```
+```rust
 #[derive(Debug)]
 pub struct Username(String);
 
@@ -56,7 +56,7 @@ assert_eq!(err, "value is invalid");
 ```
 
 Using `prae`, you will do it like this:
-```
+```rust
 use prae::define;
 
 define! {
