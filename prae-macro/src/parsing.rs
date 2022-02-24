@@ -29,12 +29,6 @@ impl Parse for Definition {
         // Parse closures.
         let adjust = parse_adjust_closure(input)?;
         let validate = parse_validation_closure(input)?;
-        if adjust.is_none() && validate.is_none() {
-            return Err(Error::new(
-                input.span(),
-                "neither `adjust` nor `ensure`/`validate` closures were given",
-            ));
-        }
 
         Ok(Definition {
             attrs,
@@ -70,6 +64,7 @@ fn parse_adjust_closure(input: ParseStream) -> syn::Result<Option<AdjustClosure>
     }))
 }
 
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ValidationClosure {
     Validate(ValidateClosure),
     Ensure(EnsureClosure),

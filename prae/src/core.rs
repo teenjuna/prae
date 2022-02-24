@@ -6,8 +6,8 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
-/// A trait that describes a type, a process through which the type must go
-/// on every construction and mutation, and a type of an error that can
+/// A trait that describes a type, a process through which the type's value must
+/// go on every construction and mutation, and a type of an error that can
 /// occur during the process.
 pub trait Bound {
     /// The name of the type that will utilize this bound.
@@ -20,11 +20,12 @@ pub trait Bound {
     type Error: fmt::Debug;
 
     /// The process that will be called on every construction and mutation
-    /// of the underlying type.
+    /// of the inner value.
     fn process(value: &mut Self::Target) -> Result<(), Self::Error>;
 }
 
-/// A thin wrapper around an inner type that utilizes [`bound`](Bound) `B`
+// TODO: add examples for methods.
+/// A thin wrapper around an inner type that utilizes [`Bound`](Bound) `B`
 /// to ensure the inner value is always valid.
 ///
 /// It provides several default methods that allow you to construct, modify
@@ -35,7 +36,7 @@ pub trait Bound {
 /// allows this wrapper to act as similar as possible to the underlying
 /// type. For example, if your underlying type is a [`Vec`](Vec) and you
 /// want to get some item by it's index, you can avoid doing `v.get()[i]`
-/// and do `v[i]` directry!
+/// and do `v[i]` directly!
 #[derive(Debug)]
 pub struct Bounded<T, B: Bound<Target = T>>(T, PhantomData<B>);
 
@@ -99,9 +100,9 @@ impl<B: Bound> Bounded<B::Target, B> {
         }
     }
 
-    /// Same as [`new`](Self::new), but without applying associated bound's process.
-    /// This makes the caller responsible for the validity of inner value.
-    /// Use only for optimization purposes.
+    /// Same as [`new`](Self::new), but without applying associated bound's
+    /// process. This makes the caller responsible for the validity of inner
+    /// value. Use only for optimization purposes.
     #[cfg(feature = "unprocessed")]
     #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     pub fn new_unprocessed<V>(value: V) -> Self
@@ -113,9 +114,9 @@ impl<B: Bound> Bounded<B::Target, B> {
         Self(value, PhantomData)
     }
 
-    /// Same as [`set`](Self::set), but without applying associated bound's process.
-    /// This makes the caller responsible for the validity of inner value.
-    /// Use only for optimization purposes.
+    /// Same as [`set`](Self::set), but without applying associated bound's
+    /// process. This makes the caller responsible for the validity of inner
+    /// value. Use only for optimization purposes.
     #[cfg(feature = "unprocessed")]
     #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     pub fn set_unprocessed<V>(&mut self, value: V)
@@ -127,8 +128,8 @@ impl<B: Bound> Bounded<B::Target, B> {
         self.0 = value;
     }
 
-    /// Same as [`mutate`](Self::mutate), but without applying associated bound's process
-    /// and without requiring underlying type to be `Clone`.
+    /// Same as [`mutate`](Self::mutate), but without applying associated
+    /// bound's process and requiring underlying type to be `Clone`.
     /// This makes the caller responsible for the validity of inner value.
     /// Use only for optimization purposes.
     #[cfg(feature = "unprocessed")]
@@ -257,9 +258,8 @@ where
 // }
 
 /// An error that occurs when bounded type is constructed with a value that
-/// doesn't hold it's invariants. It contains some inner error that
-/// describes the reason for the error as well as the value that caused the
-/// error.
+/// isn't valid. It contains some inner error that describes the reason for the
+/// error as well as the value that caused the error.
 #[derive(Debug)]
 pub struct ConstructionError<B: Bound> {
     pub inner: B::Error,
@@ -295,11 +295,10 @@ where
     // Waiting for the stabilization of specialization?
 }
 
-/// An error that occurs when bounded type is mutated in a way so that
-/// it's inner value doesn't hold it's invariants anymore. It contains some
-/// inner error that describes the reason for the error as well as both
-/// the value before mutation and the value after mutation (that caused the
-/// error).
+/// An error that occurs when bounded type is mutated in a way so that it's
+/// inner value isn't valid anymore. It contains some inner error that describes
+/// the reason for the error as well as both the value before mutation and the
+/// value after mutation (that caused the error).
 #[derive(Debug)]
 pub struct MutationError<B: Bound> {
     pub inner: B::Error,
@@ -331,14 +330,15 @@ where
 {
     // NOTE: `self.inner` could be used for `source` function.
     // However, it would require `B::Error: Error + 'static`,
-    // which is more restrictive, therefore less appealing.
+    // which is more restrictive, and therefore less appealing.
     // It's also not clear for me if this change would be
     // useful.
     // Waiting for the stabilization of specialization?
 }
 
-/// Convenience trait that allows mapping from `Result<_, ConstructionError<Bound>>` and
-/// `Result<_, MutationError<Bound>` to `Result<_, Bound::Error>`.
+/// Convenience trait that allows mapping from `Result<_,
+/// ConstructionError<Bound>>` and `Result<_, MutationError<Bound>` to
+/// `Result<_, Bound::Error>`.
 pub trait MapInnerError<O, E> {
     fn map_inner(self) -> Result<O, E>;
 }
@@ -358,5 +358,36 @@ where
 {
     fn map_inner(self) -> Result<O, B::Error> {
         self.map_err(|err| err.inner)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T, B> serde::Deserialize<'de> for Bounded<T, B>
+where
+    T: serde::Deserialize<'de> + std::fmt::Debug,
+    B: Bound<Target = T> + fmt::Debug,
+    B::Error: std::fmt::Display + std::fmt::Debug,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::new(B::Target::deserialize(deserializer)?)
+            .map_err(|e| serde::de::Error::custom(e.inner))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T, B> serde::Serialize for Bounded<T, B>
+where
+    T: serde::Serialize,
+    B: Bound<Target = T>,
+    B::Error: std::fmt::Display + std::fmt::Debug,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        B::Target::serialize(self.get(), serializer)
     }
 }

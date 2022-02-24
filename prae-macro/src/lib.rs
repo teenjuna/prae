@@ -22,10 +22,10 @@ pub fn define(input: TokenStream) -> TokenStream {
     let bound_ident = format_ident!("{}Bound", name);
 
     // Produce output for bound extension.
-    let extend_expr = match extend_bound {
+    let extend_expr = match &extend_bound {
         None => quote!(),
-        Some(bound_ident) => quote! {
-            <#bound_ident as prae::Bound>::process(value)?;
+        Some(bound) => quote! {
+            <#bound as prae::Bound>::process(value)?;
         },
     };
 
@@ -42,7 +42,10 @@ pub fn define(input: TokenStream) -> TokenStream {
 
     // Produce output for error type and validation expression.
     let (err_type, validate_expr) = match validate {
-        None => (quote!(&'static str), quote!()),
+        None => match &extend_bound {
+            None => (quote!(&'static str), quote!(Ok(()))),
+            Some(bound) => (quote!(<#bound as prae::Bound>::Error), quote!(Ok(()))),
+        },
         Some(closure) => match closure {
             ValidationClosure::Validate(ValidateClosure { expr, err_type }) => (
                 quote!(#err_type),

@@ -1,9 +1,15 @@
 [package]
-name = "prae-macro"
-version = "0.1.0"
+name = "prae_macro"
+version = "0.5.0"
 edition = "2021"
 license = "Unlicense"
 description = "Proc macro for `prae` crate"
+documentation = "https://docs.rs/prae"
+readme = "../README.md"
+repository = "https://github.com/teenjuna/prae"
+keywords = ["validation", "macro", "invariant", "generation"]
+categories = ["development-tools"]
+
 
 [lib]
 proc-macro = true
