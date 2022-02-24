@@ -1,2 +1,6 @@
 [workspace]
-members = ["prae", "prae_macro"]
+members = ["prae", "prae-macro"]
+
+[profile.test]
+debug-assertions = false
+

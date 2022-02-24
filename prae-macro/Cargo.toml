@@ -1,0 +1,20 @@
+[package]
+name = "prae_macro"
+version = "0.5.1"
+edition = "2021"
+license = "Unlicense"
+description = "Proc macro for `prae` crate"
+documentation = "https://docs.rs/prae"
+readme = "../README.md"
+repository = "https://github.com/teenjuna/prae"
+keywords = ["validation", "macro", "invariant", "generation"]
+categories = ["development-tools"]
+
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full", "extra-traits"] }

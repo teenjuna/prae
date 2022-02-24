@@ -1,6 +1,5 @@
 #[cfg(feature = "serde")]
 mod tests {
-    use prae::Guard;
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -33,10 +32,7 @@ mod tests {
         }
         "#;
         let err = serde_json::from_str::<User>(json).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "provided value is invalid at line 4 column 9"
-        );
+        assert_eq!(err.to_string(), "value is invalid at line 4 column 9");
     }
 
     #[test]

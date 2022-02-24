@@ -1,5 +1,4 @@
 use assert_matches::assert_matches;
-use prae::Guard;
 
 #[derive(Debug)]
 pub struct UsernameError;
@@ -7,7 +6,7 @@ pub struct UsernameError;
 prae::define! {
     pub Username: String
     adjust   |u| *u = u.trim().to_owned()
-    validate |u| -> Result<(), UsernameError> {
+    validate(UsernameError) |u| {
         if u.is_empty() {
             Err(UsernameError)
         } else {
@@ -31,21 +30,14 @@ fn construction_succeeds_for_valid_data() {
 fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
     assert_matches!(
-        un.try_mutate(|u| *u = "  ".to_owned()),
+        un.mutate(|u| *u = "  ".to_owned()),
         Err(prae::MutationError { .. })
     );
 }
 
 #[test]
-#[should_panic]
-fn mutation_panics_for_invalid_data() {
-    let mut un = Username::new("user").unwrap();
-    un.mutate(|u| *u = "  ".to_owned());
-}
-
-#[test]
 fn mutation_succeeds_for_valid_data() {
     let mut un = Username::new("user").unwrap();
-    assert!(un.try_mutate(|u| *u = "  new user  ".to_owned()).is_ok());
+    un.mutate(|u| *u = "  new user  ".to_owned()).unwrap();
     assert_eq!(un.get(), "new user");
 }

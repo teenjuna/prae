@@ -1,5 +1,5 @@
 use assert_matches::assert_matches;
-use prae::Guard;
+use prae::MapInnerError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UsernameError;
@@ -12,7 +12,7 @@ impl std::fmt::Display for UsernameError {
 
 prae::define! {
     pub Username: String
-    validate |u| -> Result<(), UsernameError> {
+    validate(UsernameError) |u| {
         if u.is_empty() {
             Err(UsernameError{})
         } else {
@@ -22,30 +22,28 @@ prae::define! {
 }
 
 #[test]
-#[ignore] // FIXME
 fn construction_error_formats_correctly() {
     let err = Username::new("").unwrap_err();
     assert_eq!(
         err.to_string(),
-        "failed to create Username from value \"\": username is empty"
+        "failed to construct type Username from value \"\": username is empty"
     );
 }
 
 #[test]
-#[ignore] // FIXME
 fn mutation_error_formats_correctly() {
     let mut un = Username::new("user").unwrap();
-    let err = un.try_mutate(|u| *u = "".to_owned()).unwrap_err();
+    let err = un.mutate(|u| *u = "".to_owned()).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "failed to mutate Username from value \"user\" to \"\": username is empty"
+        "failed to mutate type Username from value \"user\" to value \"\": username is empty"
     );
 }
 
 #[test]
 fn construction_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
-        Username::new("").map_err(|e| e.into_inner())?;
+        Username::new("").map_inner()?;
         Ok(())
     }();
 }
@@ -54,8 +52,7 @@ fn construction_error_can_be_transormed_into_inner() {
 fn mutation_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
         let mut un = Username::new("user").unwrap();
-        un.try_mutate(|u| *u = "".to_owned())
-            .map_err(|e| e.into_inner())?;
+        un.mutate(|u| *u = "".to_owned()).map_inner()?;
         Ok(())
     }();
 }
@@ -78,21 +75,14 @@ fn construction_succeeds_for_valid_data() {
 fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
     assert_matches!(
-        un.try_mutate(|u| *u = "".to_owned()),
+        un.mutate(|u| *u = "".to_owned()),
         Err(prae::MutationError { inner, .. }) if inner == UsernameError {}
     );
 }
 
 #[test]
-#[should_panic]
-fn mutation_panics_for_invalid_data() {
-    let mut un = Username::new("user").unwrap();
-    un.mutate(|u| *u = "".to_owned());
-}
-
-#[test]
 fn mutation_succeeds_for_valid_data() {
     let mut un = Username::new("user").unwrap();
-    assert!(un.try_mutate(|u| *u = " new user ".to_owned()).is_ok());
+    un.mutate(|u| *u = " new user ".to_owned()).unwrap();
     assert_eq!(un.get(), " new user ");
 }

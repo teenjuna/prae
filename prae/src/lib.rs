@@ -1,251 +1,409 @@
-//! This crate provides a way to define type wrappers (guards) that behave as close as
-//! possible to the underlying type, but guarantee to uphold arbitrary invariants at all times.
-//!
-//! The name comes from latin _praesidio_, which means _guard_.
-//!
-//! # Basic usage
-//!
-//! The simplest way to create a [guard](Guard) is to use the [`define!`](prae_macro::define) macro.
-//!
-//! Let's create a `Text` type. It will be a wrapper around a `String` with an invariant that the
-//! value is not empty:
-//!
-//! ```
-//! use prae::{define, Guard};
-//!
-//! // Here we define our new type.
-//! // `pub`             - the visibility of our type;
-//! // `Text`            - the name of our type;
-//! // `String`          - the underlying type;
-//! // `ensure $closure` - the closure that returns `true` if the value is valid.
-//! define!(pub Text: String ensure |t| !t.is_empty());
-//!
-//! // We can easily create a value of our type. Note that the type of the agrument
-//! // is not `String`. That is because `Text::new(...)` accepts anything
-//! // that is `Into<String>`.
-//! let mut t = Text::new("not empty!").unwrap();
-//! assert_eq!(t.get(), "not empty!");
-//!
-//! // One way to mutate the value is to call the `mutate` method.
-//! // See docs for `prae::Guard` to learn about other methods.
-//! t.mutate(|t| *t = format!("{} updated", t));
-//! assert_eq!(t.get(), "not empty! updated");
-//!
-//! // Creating an invalid value is not possible.
-//! assert!(Text::new("").is_err());
-//! ```
-//!
-//! Okay, we're getting there. Right now our type will accept every non-empty string and reject any
-//! zero-length string. But does it really protect us from a possible abuse? The following example
-//! shows us, that the answer is no:
-//!
-//! ```
-//! # use prae::{define, Guard};
-//! # define!(pub Text: String ensure |t| !t.is_empty());
-//! // Technically not empty, but makes no sense as a "text" for a human.
-//! assert!(Text::new(" \n\n ").is_ok());
-//!
-//! // Trailing whitespace should not be allowed either.
-//! assert!(Text::new(" text ").is_ok());
-//! ```
-//!
-//! One way to solve this is to tell the user of our type to always trim the string before any
-//! construction/mutation of the `Text`. But this can go wrong very easily. It would be better if
-//! we could somehow embed this behaviour into our type. And we can!
-//!
-//! ```
-//! use prae::{define, Guard};
-//!
-//! define! {
-//!     /// Btw, this comment will document our type!
-//!     pub Text: String
-//!     // We will mutate given value before every construction/mutation.
-//!     adjust |t| {
-//!         let trimmed = t.trim();
-//!         if trimmed.len() != t.len() {
-//!             *t = trimmed.to_string()
-//!         }
-//!     }
-//!     ensure |t| !t.is_empty()
-//! }
-//!
-//! // This won't work anymore.
-//! assert!(Text::new("   ").is_err());
-//!
-//! // And this will be automatically adjusted.
-//! let t = Text::new(" no trailing whitespace anymore! ").unwrap();
-//! assert_eq!(t.get(), "no trailing whitespace anymore!");
-//! ```
-//!
-//! That's a lot better!
-//!
-//! # Custom errors
-//!
-//! Both [`ConstructionError`](ConstructionError) and [`MutationError`](MutationError) are
-//! useful wrappers around some inner error. They provide access to the values that were in play when
-//! the error occured. By default (when you use `ensure` closure inside the
-//! [`define!`]), the inner error is just `&'static str` with the default error message.
-//!
-//! Sometimes, however, we might want to use our own type. In this case, we should use `validate`
-//! instead of `ensure`:
-//!
-//! ```rust
-//! use prae::{define, Guard};
-//!
-//! #[derive(Debug)]
-//! pub enum Error {
-//!     Empty,
-//!     NotEnoughWords,
-//!     TooManyWords,
-//! }
-//!
-//! define! {
-//!     /// A text that contains two words.
-//!     pub TwoWordText: String
-//!     adjust   |t| *t = t.trim().to_owned()
-//!     validate |t| -> Result<(), Error> {
-//!         let wc = t.split_whitespace().count();
-//!         if t.is_empty() {
-//!             Err(Error::Empty)
-//!         } else if wc < 2 {
-//!             Err(Error::NotEnoughWords)
-//!         } else if wc > 2 {
-//!             Err(Error::TooManyWords)
-//!         } else {
-//!             Ok(())
-//!         }
-//!     }
-//! }
-//!
-//! assert!(matches!(TwoWordText::new("  ").unwrap_err().inner, Error::Empty));
-//! assert!(matches!(TwoWordText::new("word").unwrap_err().inner, Error::NotEnoughWords));
-//! assert!(matches!(TwoWordText::new("word word word").unwrap_err().inner, Error::TooManyWords));
-//! assert!(TwoWordText::new("word word").is_ok());
-//! ```
-//!
-//! # Extending our types
-//!
-//! If you want to reuse adjustment/validation behaviour of some type in a new type, you should use
-//! [`extend!`]. It's just like [`define!`], but it's inner type should be [`Guard`].
-//!
-//! ```
-//! use prae::{define, extend, Guard};
-//!
-//! #[derive(Debug)]
-//! pub enum TextError {
-//!     Empty,
-//! }
-//!
-//! define! {
-//!     /// A non-empty string without trailing whitespace.
-//!     pub Text: String
-//!     adjust   |t| *t = t.trim().to_owned()
-//!     validate |t| -> Result<(), TextError> {
-//!         if t.is_empty() {
-//!             Err(TextError::Empty)
-//!         } else {
-//!             Ok(())
-//!         }
-//!     }
-//! }
-//!
-//! #[derive(Debug)]
-//! pub enum TwoWordTextError {
-//!     Empty,
-//!     NotEnoughWords,
-//!     TooManyWords,
-//! }
-//!
-//! impl From<TextError> for TwoWordTextError {
-//!     fn from(te: TextError) -> Self {
-//!         match te {
-//!             TextError::Empty => Self::Empty,
-//!         }
-//!     }
-//! }
-//!
-//! extend! {
-//!     /// A text that contains two words.
-//!     pub TwoWordText: Text
-//!     validate |t| -> Result<(), TwoWordTextError> {
-//!         // We don't need to check if `t` is empty, since
-//!         // it already passed the validation of `Text` at
-//!         // this point.
-//!         let wc = t.split_whitespace().count();
-//!         if wc < 2 {
-//!             Err(TwoWordTextError::NotEnoughWords)
-//!         } else if wc > 2 {
-//!             Err(TwoWordTextError::TooManyWords)
-//!         } else {
-//!             Ok(())
-//!         }
-//!     }
-//! }
-//!
-//! assert!(matches!(TwoWordText::new("  ").unwrap_err().inner, TwoWordTextError::Empty));
-//! assert!(matches!(TwoWordText::new("word").unwrap_err().inner, TwoWordTextError::NotEnoughWords));
-//! assert!(matches!(TwoWordText::new("word word word").unwrap_err().inner, TwoWordTextError::TooManyWords));
-//! assert!(TwoWordText::new("word word").is_ok());
-//! ```
-//!
-//! # Integration with serde
-//!
-//! If you enable `serde` feature, every [`Guard`] will automatically implement
-//! [`Serialize`](https://docs.serde.rs/serde/trait.Serialize.html) and
-//! [`Deserialize`](https://docs.serde.rs/serde/trait.Deserialize.html) if its inner type implements them.
-//! Deserialization will automatically return an error if the data is not invalid.
-//!
-//! Here is an example of some API implemented using [`axum`](https://crates.io/crates/axum):
-//!
-//! ```ignore
-//! use prae::{define, Guard};
-//! use axum::{extract, handler::post, Router};
-//!
-//! define! {
-//!     Text: String
-//!     adjust   |t| *t = t.trim().to_owned()
-//!     validate |t| !t.is_empty()
-//! }
-//!
-//! async fn save_text(extract::Json(text): extract::Json<Text>) {
-//!     // Our `text` was automatically validated. We don't need to
-//!     // do anything manually at all!
-//!     // ...
-//! }
-//!
-//! let app = Router::new().route("/texts", post(save_text));
-//! ```
-//!
-//! # Optimising for performance
-//!
-//! If you find yourself in a situation where always adjusting/validating values of your type
-//! is a performance issue, you can opt in to avoid those extra calls using methods under the
-//! `unchecked` feature gate. Those methods (`new_unchecked`, `mutate_unchecked`, etc.) don't
-//! adjust/validate your values at all, making __you__ responsible for the validity of your data.
-//!
-//! [`Guard`]: Guard
-//! [`define!`]: prae_macro::define
-//! [`extend!`]: prae_macro::extend
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
-#![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
-#![warn(trivial_casts)]
-#![warn(trivial_numeric_casts)]
-#![warn(unsafe_code)]
-#![warn(unused_crate_dependencies)]
-#![warn(unused_import_braces)]
-#![warn(unused_qualifications)]
+//! # What is `prae`?
+//!
+//! This crate aims to provide a better way to define types that require
+//! validation. `prae` **is not** a validation library, but a library that
+//! **helps developers** to define validation-requiring types with **very little
+//! effort**.
+//!
+//! # How it works?
+//!
+//! The main way to use `prae` is through [`define!`](crate::define) macro.
+//!
+//! For example, suppose you want to create a `Username` type. You want this
+//! type to be a string, and you don't want it to be empty. Traditionally, would
+//! create a wrapper struct with getter and setter functions, like this
+//! simplified example:
+//! ```
+//! #[derive(Debug)]
+//! pub struct Username(String);
+//!
+//! impl Username {
+//!     pub fn new(username: &str) -> Result<Self, &'static str> {
+//!         let username = username.trim().to_owned();
+//!         if username.is_empty() {
+//!             Err("value is invalid")
+//!         } else {
+//!             Ok(Self(username))
+//!         }
+//!     }
+//!
+//!     pub fn get(&self) -> &str {
+//!         &self.0
+//!     }
+//!
+//!     pub fn set(&mut self, username: &str) -> Result<(), &'static str> {
+//!         let username = username.trim().to_owned();
+//!         if username.is_empty() {
+//!             Err("value is invalid")
+//!         } else {
+//!             self.0 = username;
+//!             Ok(())
+//!         }
+//!    }
+//! }
+//!
+//! let username = Username::new(" my username ").unwrap();
+//! assert_eq!(username.get(), "my username");
+//!
+//! let err = Username::new("  ").unwrap_err();
+//! assert_eq!(err, "value is invalid");
+//! ```
+//!
+//! Using `prae`, you will do it like this:
+//! ```
+//! use prae::define;
+//!
+//! define! {
+//!     pub Username: String
+//!     adjust |username| *username = username.trim().to_owned()
+//!     ensure |username| !username.is_empty()
+//! }
+//!
+//! let username = Username::new(" my username ").unwrap();
+//! assert_eq!(username.get(), "my username");
+//!
+//! let err = Username::new("  ").unwrap_err();
+//! assert_eq!(err.inner, "value is invalid");
+//! assert_eq!(err.value, "");
+//! ```
+//!
+//! Futhermore, `prae` allows you to use custom errors and extend your types.
+//! See docs for [`define!`](crate::define) for more information and examples.
+//!
+//! # Additional features
+//!
+//! ## `*_unprocessed` functions
+//!
+//! By default, all methods of the wrappers generated by
+//! [`define!`](crate::define) (which are just aliases of the
+//! [`Bounded`](crate::Bounded) type) will run the adjustment/validation (if
+//! present) routines on every construction and mutation.
+//!
+//! If you find yourself in a situation where you know for sure that some
+//! construction/mutation is valid, you can opt out of this using
+//! `*_unprocessed` functions (e.g. `foo.set_unprocessed(value)` instead of
+//! `foo.set(value)`) and save a bit of computations.
+//!
+//! To be able to use these functions, just enable the `unprocessed`
+//! feature of the crate.
+//!
+//! ## Serde integration
+//!
+//! You can enable serde integration with the `serde` feature. It will implement
+//! [`Serialize`](serde::Serialize) and [`Deserialize`](serde::Deserialize)
+//! traits for the wrappers if their inner type implements them. The
+//! deserialization will automatically fail if it contains invalid value. Here
+//! is an example:
+//!
+//! ```
+//! use serde::{Deserialize, Serialize};
+//! use prae::define;
+//!
+//! define! {
+//!     Username: String
+//!     adjust   |username| *username = username.trim().to_string()
+//!     validate(&'static str) |username| {
+//!         if username.is_empty() {
+//!             Err("username is empty")
+//!         } else {
+//!             Ok(())
+//!         }
+//!     }
+//! }
+//!
+//! #[derive(Debug, Deserialize, Serialize)]
+//! struct User {
+//!     username: Username,
+//! }
+//!
+//! // Serialization works as expected.
+//! let u = User {
+//!     username: Username::new("  john doe  ").unwrap(),
+//! };
+//! let j = serde_json::to_string(&u).unwrap();
+//! assert_eq!(j, r#"{"username":"john doe"}"#);
+//!
+//! // Deserialization with invalid data fails.
+//! let e = serde_json::from_str::<User>(r#"{ "username": "  " }"#).unwrap_err();
+//! assert_eq!(e.to_string(), "username is empty at line 1 column 20");
+//!
+//! // And here we get a nice adjusted value.
+//! let u = serde_json::from_str::<User>(r#"{ "username": "  john doe  " }"#).unwrap();
+//! assert_eq!(u.username.get(), "john doe");
+//! ```
+//!
+//! # Drawbacks
+//!
+//! Although proc macros are very powerful, they aren't free. In this case, you
+//! have to pull up additional dependencies such as [`syn`](https://docs.rs/syn) and
+//! [`quote`](https://docs.rs/quote), and expect a slightly slower compile times.
 
 mod core;
 
 pub use crate::core::*;
-pub use prae_macro::{define, extend};
 
-// We need this to silince the unused_crate_dependencies warning.
-// See: https://github.com/rust-lang/rust/issues/57274
+/// A macro that makes defining new types easy.
+///
+/// This macro uses custom syntax described below and introduces two new types
+/// to the scope: the [bounded](crate::Bounded) type (that you will use in your
+/// code, so check it's documentation of available methods) and it's associated
+/// [bound](crate::Bound) (which will hidden from your docs).
+///
+/// # Macro structure
+///
+/// ## Type signature
+///
+/// This part describes the visibility of the type, it's name and it's inner
+/// type:
+/// ```
+/// use prae::define;
+///
+/// define! {
+///     pub UserId: u64
+///     // ...
+/// }
+///
+/// define! {
+///     UserName: String
+///     // ...
+/// }
+/// ```
+///
+/// ## Type extension
+///
+/// In case you want to extend the validation/adjustment logic of some other
+/// type, you should just specify the other type's [`Bound`](crate::Bound):
+/// ```
+/// # use prae::define;
+/// # define! {
+/// #      pub UserId: u64
+/// #      // ...
+/// #  }
+/// define! {
+///     pub AdminUserID: u64
+///     extend UserIdBound
+///     // ...
+/// }
+/// ```
+/// When you do this, your type will execute adjustment and validation (see
+/// below) of the extended type first, then run the adjustment and validation of
+/// the current type.
+///
+/// Note that such extension is only possible when the types have the same inner
+/// type.
+///
+/// ## Adjustment closure
+///
+/// This part describes how a value of your type should be mutated before
+/// every construction or mutation.
+/// ```
+/// # use prae::define;
+/// define! {
+///     pub UserName: String
+///     // ..
+///     adjust |name: &mut String| *name = name.trim().to_owned()
+///     // ...
+/// }
+/// ```
+///
+/// ## Validation closure
+///
+/// This part describes how a value of your type should be validated before
+/// every construction or mutation. There are two ways you can do this: using
+/// `ensure` closure or using `validate` closure.
+///
+/// ### Using `ensure`
+///
+/// This is the simplest method. In this case, your closure returns `true` if
+/// the value is valid and `false` otherwise. The downside of this method is
+/// that you can't use custom error types. If the value is invalid, the error
+/// will be just a string `"value is invalid"`.
+/// ```
+/// # use prae::define;
+/// define! {
+///     pub UserName: String
+///     // ...
+///     ensure |name: &String| !name.is_empty()
+/// }
+/// ```
+///
+/// ### Using `validate`
+///
+/// This method allows you to use custom errors.
+/// ```
+/// # use prae::define;
+/// #[derive(Debug)]
+/// pub enum UserNameError {
+///     Empty,
+/// }
+///
+/// define! {
+///     pub UserName: String
+///     // ...
+///     validate(UserNameError) |name: &String| {
+///         if name.is_empty() {
+///             Err(UserNameError::Empty)
+///         } else {
+///             Ok(())
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Examples
+///
+/// ## Basic usage
+///
+/// Suppose we want to implement some types for a typography app. Let's start
+/// from a `Text` type, which represents a string with some symbols
+/// (non-empty!).
+/// ```
+/// # use prae::define;
+/// /// A string with some symbols.
+/// define! {
+///     pub Text: String
+///     ensure |text| !text.is_empty()
+/// }
+///
+/// // Let's try it.
+/// let text1 = Text::new("some text").unwrap();
+/// assert_eq!(text1.get(), "some text");
+///
+/// // Now with an invalid value.
+/// let err = Text::new("").unwrap_err();
+/// assert_eq!(err.inner, "value is invalid");
+/// assert_eq!(err.value, "");
+///
+/// // But what if...
+/// assert!(Text::new("   ").is_ok());
+/// ```
+///
+/// The last line doesn't look right. Although the string `"   "` contains
+/// symbols, it's all whitespace. How can we solve that? Well, we could
+/// use `!text.trim().is_empty()` inside the `ensure` closure. But what if we
+/// give give it a string with some symbols and trailing whitespace, like `"
+/// some text\n"`? This string will pass validation and will be saved in it's
+/// original form. We don't want that in this particular case. Let's fix it with
+/// `adjust` closure!
+///
+/// ```
+/// # use prae::define;
+/// /// A non-empty string without trailing whitespace.
+/// define! {
+///     pub Text: String
+///     adjust |text| *text = text.trim().to_owned()
+///     ensure |text| !text.is_empty()
+/// }
+///
+/// // Now we can't use a string with only whitespace.
+/// let err = Text::new("  ").unwrap_err();
+/// assert_eq!(err.inner, "value is invalid");
+/// assert_eq!(err.value, "");
+///
+/// // And the trailing whitespace will be truncated.
+/// let text = Text::new("  some text\n").unwrap();
+/// assert_eq!(text.get(), "some text");
+/// ```
+///
+/// ## Custom errors
+///
+/// Okay, so far so good. The only problem is: right now our `Text` type will
+/// return string error `"value is invalid"` if it's value is not valid. If we
+/// want to make our error more descriptive, we should create a custom error!
+/// ```
+/// # use prae::define;
+/// /// Error that can happen during construction/mutation of `Text`.
+/// #[derive(Debug)]
+/// pub enum TextError {
+///     Empty,
+/// }
+///
+/// define! {
+///     pub Text: String
+///     adjust |text| *text = text.trim().to_owned()
+///     validate(TextError) |text| {
+///         if text.is_empty() {
+///             Err(TextError::Empty)
+///         } else {
+///             Ok(())
+///         }
+///     }
+/// }
+///
+/// // Let's try it!
+/// let err = Text::new("  ").unwrap_err();
+/// assert!(matches!(err.inner, TextError::Empty));
+/// assert_eq!(err.value, "");
+/// ```
+///
+/// ## Type extension
+///
+/// It's a perfect time to introduce a new type: `CapitalizedText`. This type is
+/// very similar to `Text`, but requires the first letter to be capitalized.
+/// Sinces this type inherits invariants of `Text`, we will just extend `Text`
+/// type to make the code less verbose.
+/// ```
+/// # use prae::define;
+/// /// Error that can happen during construction/mutation of `Text`.
+/// #[derive(Debug)]
+/// pub enum TextError {
+///     Empty,
+/// }
+///
+/// define! {
+///     pub Text: String
+///     adjust |text| *text = text.trim().to_owned()
+///     validate(TextError) |text| {
+///         if text.is_empty() {
+///             Err(TextError::Empty)
+///         } else {
+///             Ok(())
+///         }
+///     }
+/// }
+///
+/// /// Error that can happen during construction/mutation of `CapitalizedText`.
+/// #[derive(Debug)]
+/// pub enum CapitalizedTextError {
+///     Empty,
+///     NotCapitalized,
+/// }
+///
+/// impl From<TextError> for CapitalizedTextError {
+///     fn from(err: TextError) -> Self {
+///         match err {
+///             TextError::Empty => Self::Empty,
+///         }
+///     }
+/// }
+///
+/// define! {
+///     pub CapitalizedText: String
+///     extend TextBound
+///     validate(CapitalizedTextError) |text| {
+///         if text.chars().next().unwrap().is_lowercase() {
+///             Err(CapitalizedTextError::NotCapitalized)
+///         } else {
+///             Ok(())
+///         }
+///     }
+/// }
+///
+/// // Let's try it.
+/// let text = CapitalizedText::new("    Some text ").unwrap();
+/// assert_eq!(text.get(), "Some text");
+///
+/// let err = CapitalizedText::new("  some other text").unwrap_err();
+/// assert!(matches!(err.inner, CapitalizedTextError::NotCapitalized));
+/// assert_eq!(err.value, "some other text");
+///
+/// let err = CapitalizedText::new("   ").unwrap_err();
+/// assert!(matches!(err.inner, CapitalizedTextError::Empty));
+/// assert_eq!(err.value, "");
+/// ```
+pub use prae_macro::define;
+
 #[cfg(test)]
-mod test_deps {
-    use assert_matches as _;
-    use serde as _;
-    use serde_json as _;
-}
+mod tests {}

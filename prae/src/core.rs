@@ -1,210 +1,321 @@
-use std::hash::Hash;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::error::Error;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::ops::{Deref, Index};
-use std::{error, fmt};
 
-/// A trait that describes behaviour of some guard wrapper. It specifies the
-/// type of the inner value, the type of a possible error and the function
-/// that will be called on construction and all subsequent mutations of the
-/// guard wrapper.
+/// A trait that describes a type, a process through which the type's value must
+/// go on every construction and mutation, and a type of an error that can
+/// occur during the process.
 pub trait Bound {
-    /// The type of inner value.
+    /// The name of the type that will utilize this bound.
+    const TYPE_NAME: &'static str;
+
+    /// The underlying type.
     type Target: fmt::Debug;
 
-    /// The type of possible validation error.
+    /// The type of possible error.
     type Error: fmt::Debug;
 
-    /// A function that either adjusts the value, validates it, or both.
-    fn apply(v: &mut Self::Target) -> Result<(), Self::Error>;
+    /// The process that will be called on every construction and mutation
+    /// of the inner value.
+    fn process(value: &mut Self::Target) -> Result<(), Self::Error>;
 }
 
-/// A type that has some inner value and a [`Bound`](Bound) attached to it.
-/// It allows user to construct, mutate and get it's inner value, and promises
-/// that inner value will be always valid according to the associated bound.
-pub trait Guard
-where
-    Self: Sized,
-{
-    /// The bound of the guard.
-    type Bound: Bound;
-
-    /// Constructs the guard with the provided value. Will return an error if
-    /// the value is not valid.
-    fn new<V: Into<<Self::Bound as Bound>::Target>>(v: V) -> Result<Self, ConstructionError<Self>>;
-
-    /// Returns a shared reference to the inner value.
-    fn get(&self) -> &<Self::Bound as Bound>::Target;
-
-    /// Mutates inner value using provided closure. **Will panic** if the value
-    /// becomes invalid.
-    fn mutate(&mut self, f: impl FnOnce(&mut <Self::Bound as Bound>::Target));
-
-    /// Mutates inner value using provided closure. Will return an error if the
-    /// value becomes instalid.
-    fn try_mutate(
-        &mut self,
-        f: impl FnOnce(&mut <Self::Bound as Bound>::Target),
-    ) -> Result<(), MutationError<Self>>
-    where
-        <Self::Bound as Bound>::Target: Clone;
-
-    /// Retrieve the inner, unprotected value.
-    fn into_inner(self) -> <Self::Bound as Bound>::Target;
-
-    /// Constructs the guard with the provided value without adjusting and
-    /// validating it, **making the caller responsible for the validity** of the
-    /// data. **Should be used only for optimisation purposes**.
-    #[cfg(feature = "unchecked")]
-    fn new_unchecked<V: Into<<Self::Bound as Bound>::Target>>(v: V) -> Self;
-
-    /// Mutates inner value using provided closure without adjustment and validation of the
-    /// resulting data, **making the caller responsible for the validity** of the
-    /// data. **Should be used only for optimisation purposes**.
-    #[cfg(feature = "unchecked")]
-    fn mutate_unchecked(&mut self, f: impl FnOnce(&mut <Self::Bound as Bound>::Target));
-
-    /// Gives mutable access to the inner value, **making the caller responsible for the
-    /// validity** of the data. **Should be used only for optimisation purposes**.
-    #[cfg(feature = "unchecked")]
-    fn get_mut(&mut self) -> &mut <Self::Bound as Bound>::Target;
-}
-
-/// Default guard wrapper.
+// TODO: add examples for methods.
+/// A thin wrapper around an inner type that utilizes [`Bound`](Bound) `B`
+/// to ensure the inner value is always valid.
+///
+/// It provides several default methods that allow you to construct, modify
+/// and get the inner value.
+///
+/// It also implements a bunch of default traits (such as [`Clone`](Clone),
+/// [`Eq`](Eq) and others) if the underlying type implements them. It
+/// allows this wrapper to act as similar as possible to the underlying
+/// type. For example, if your underlying type is a [`Vec`](Vec) and you
+/// want to get some item by it's index, you can avoid doing `v.get()[i]`
+/// and do `v[i]` directly!
 #[derive(Debug)]
-pub struct Guarded<B: Bound>(B::Target);
+pub struct Bounded<T, B: Bound<Target = T>>(T, PhantomData<B>);
 
-impl<T, E, B> Guard for Guarded<B>
-where
-    B: Bound<Target = T, Error = E>,
-    E: fmt::Debug,
-{
-    type Bound = B;
-
-    fn new<V: Into<T>>(v: V) -> Result<Self, ConstructionError<Self>> {
-        let mut v = v.into();
-        match B::apply(&mut v) {
-            Ok(_) => Ok(Self(v)),
-            Err(e) => Err(ConstructionError { inner: e, value: v }),
+impl<B: Bound> Bounded<B::Target, B> {
+    /// Constructs new bounded type with the provided value. Will return
+    /// an error if the value doesn't hold it's invariants.
+    pub fn new<V>(value: V) -> Result<Self, ConstructionError<B>>
+    where
+        V: Into<B::Target>,
+    {
+        let mut value = value.into();
+        match B::process(&mut value) {
+            Ok(()) => Ok(Self(value, PhantomData)),
+            Err(inner) => Err(ConstructionError { inner, value }),
         }
     }
 
-    fn get(&self) -> &T {
+    /// Returns a shared reference to the inner value.
+    pub fn get(&self) -> &B::Target {
         &self.0
     }
 
-    fn mutate(&mut self, f: impl FnOnce(&mut T)) {
-        f(&mut self.0);
-        if let Err(e) = B::apply(&mut self.0) {
-            panic!("mutation failed: {:?}", e);
+    /// Replaces inner value with the provided value. Will return an error
+    /// if the value doesn't hold it's invariants after replacement.
+    pub fn set<V>(&mut self, value: V) -> Result<(), ConstructionError<B>>
+    where
+        V: Into<B::Target>,
+    {
+        let mut value = value.into();
+        match B::process(&mut value) {
+            Ok(()) => {
+                self.0 = value;
+                Ok(())
+            }
+            Err(inner) => Err(ConstructionError { inner, value }),
         }
     }
 
-    fn try_mutate(&mut self, f: impl FnOnce(&mut T)) -> Result<(), MutationError<Self>>
+    /// Mutates inner value using provided function. Will return an error
+    /// if the value doesn't hold it's invariants after mutation.
+    ///
+    /// In order to ensure that an invalid attempt to mutate the value
+    /// doesn't break it, the underlying type must be `Clone`.
+    pub fn mutate<F>(&mut self, mutate: F) -> Result<(), MutationError<B>>
     where
-        T: Clone,
+        F: FnOnce(&mut B::Target),
+        B::Target: Clone,
     {
-        let mut tmp = self.0.clone();
-        f(&mut tmp);
-        match B::apply(&mut tmp) {
-            Ok(_) => {
-                self.0 = tmp;
+        let mut cloned = self.0.clone();
+        mutate(&mut cloned);
+        match B::process(&mut cloned) {
+            Ok(()) => {
+                self.0 = cloned;
                 Ok(())
             }
-            Err(e) => Err(MutationError {
-                inner: e,
+            Err(inner) => Err(MutationError {
+                inner,
                 old_value: self.0.clone(),
-                new_value: tmp,
+                new_value: cloned,
             }),
         }
     }
 
-    fn into_inner(self) -> T {
-        self.0
+    /// Same as [`new`](Self::new), but without applying associated bound's
+    /// process. This makes the caller responsible for the validity of inner
+    /// value. Use only for optimization purposes.
+    #[cfg(feature = "unprocessed")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
+    pub fn new_unprocessed<V>(value: V) -> Self
+    where
+        V: Into<B::Target>,
+    {
+        let mut value = value.into();
+        debug_assert!(B::process(&mut value).is_ok());
+        Self(value, PhantomData)
     }
 
-    #[cfg(feature = "unchecked")]
-    fn new_unchecked<V: Into<T>>(v: V) -> Self {
-        Self(v.into())
+    /// Same as [`set`](Self::set), but without applying associated bound's
+    /// process. This makes the caller responsible for the validity of inner
+    /// value. Use only for optimization purposes.
+    #[cfg(feature = "unprocessed")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
+    pub fn set_unprocessed<V>(&mut self, value: V)
+    where
+        V: Into<B::Target>,
+    {
+        let mut value = value.into();
+        debug_assert!(B::process(&mut value).is_ok());
+        self.0 = value;
     }
 
-    #[cfg(feature = "unchecked")]
-    fn mutate_unchecked(&mut self, f: impl FnOnce(&mut T)) {
-        f(&mut self.0);
-    }
-
-    #[cfg(feature = "unchecked")]
-    fn get_mut(&mut self) -> &mut T {
-        &mut self.0
+    /// Same as [`mutate`](Self::mutate), but without applying associated
+    /// bound's process and requiring underlying type to be `Clone`.
+    /// This makes the caller responsible for the validity of inner value.
+    /// Use only for optimization purposes.
+    #[cfg(feature = "unprocessed")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
+    pub fn mutate_unprocessed<F>(&mut self, mutate: F)
+    where
+        F: FnOnce(&mut B::Target),
+    {
+        mutate(&mut self.0);
+        debug_assert!(B::process(&mut self.0).is_ok());
     }
 }
 
-/// An error that occurs when [construction](Guard::new) of guard fails.
-#[derive(Debug)]
-pub struct ConstructionError<G: Guard> {
-    /// The error returned by the the [`Bound::apply`](Bound::apply).
-    pub inner: <G::Bound as Bound>::Error,
-    /// The value that caused the error.
-    pub value: <G::Bound as Bound>::Target,
-}
-
-impl<G: Guard> ConstructionError<G> {
-    /// Get inner error.
-    pub fn into_inner(self) -> <G::Bound as Bound>::Error {
-        self.inner
-    }
-}
-
-impl<G> fmt::Display for ConstructionError<G>
+impl<T, B> Clone for Bounded<T, B>
 where
-    G: Guard,
-    <G::Bound as Bound>::Error: fmt::Display,
+    T: Clone,
+    B: Bound<Target = T>,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T, B> Borrow<T> for Bounded<T, B>
+where
+    B: Bound<Target = T>,
+{
+    fn borrow(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T, B> AsRef<T> for Bounded<T, B>
+where
+    B: Bound<Target = T>,
+{
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T, B> Deref for Bounded<T, B>
+where
+    B: Bound<Target = T>,
+{
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T, B> PartialEq for Bounded<T, B>
+where
+    T: PartialEq,
+    B: Bound<Target = T>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl<T, B> Eq for Bounded<T, B>
+where
+    T: Eq,
+    B: Bound<Target = T>,
+{
+}
+
+impl<T, B> PartialOrd for Bounded<T, B>
+where
+    T: PartialOrd,
+    B: Bound<Target = T>,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T, B> Ord for Bounded<T, B>
+where
+    T: Ord,
+    B: Bound<Target = T>,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<T, B> Copy for Bounded<T, B>
+where
+    T: Copy,
+    B: Bound<Target = T>,
+{
+}
+
+impl<T, B> Hash for Bounded<T, B>
+where
+    T: Hash,
+    B: Bound<Target = T>,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
+
+impl<U, T, B> Index<U> for Bounded<T, B>
+where
+    T: Index<U>,
+    B: Bound<Target = T>,
+{
+    type Output = T::Output;
+    fn index(&self, index: U) -> &Self::Output {
+        self.0.index(index)
+    }
+}
+
+// FIXME: conflicts with blanket impl.
+// impl<T, B> TryFrom<T> for Bounded<T, B>
+// where
+//     B: Bound<Target = T>,
+// {
+//     type Error = ConstructionError<B>;
+//     fn try_from(value: T) -> Result<Self, Self::Error> {
+//         Self::new(value)
+//     }
+// }
+
+/// An error that occurs when bounded type is constructed with a value that
+/// isn't valid. It contains some inner error that describes the reason for the
+/// error as well as the value that caused the error.
+#[derive(Debug)]
+pub struct ConstructionError<B: Bound> {
+    pub inner: B::Error,
+    pub value: B::Target,
+}
+
+impl<B> fmt::Display for ConstructionError<B>
+where
+    B: Bound,
+    B::Error: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "failed to create {} from value {:?}: {}",
-            std::any::type_name::<G>(),
+            "failed to construct type {} from value {:?}: {}",
+            B::TYPE_NAME,
             self.value,
             self.inner,
         )
     }
 }
 
-impl<G> error::Error for ConstructionError<G>
+impl<B> Error for ConstructionError<B>
 where
-    G: Guard + fmt::Debug,
-    G::Bound: fmt::Debug,
-    <G::Bound as Bound>::Error: fmt::Display,
+    B: Bound + fmt::Debug,
+    B::Error: fmt::Display,
 {
+    // NOTE: `self.inner` could be used for `source` function.
+    // However, it would require `B::Error: Error + 'static`,
+    // which is more restrictive, therefore less appealing.
+    // It's also not clear for me if this change would be
+    // useful.
+    // Waiting for the stabilization of specialization?
 }
 
-/// An error that occurs when [mutation](Guarded::try_mutate) of guard fails.
+/// An error that occurs when bounded type is mutated in a way so that it's
+/// inner value isn't valid anymore. It contains some inner error that describes
+/// the reason for the error as well as both the value before mutation and the
+/// value after mutation (that caused the error).
 #[derive(Debug)]
-pub struct MutationError<G: Guard> {
-    /// The error returned by the the [`Bound::apply`](Bound::apply).
-    pub inner: <G::Bound as Bound>::Error,
-    /// The value before mutation.
-    pub old_value: <G::Bound as Bound>::Target,
-    /// The value that caused the error.
-    pub new_value: <G::Bound as Bound>::Target,
+pub struct MutationError<B: Bound> {
+    pub inner: B::Error,
+    pub old_value: B::Target,
+    pub new_value: B::Target,
 }
 
-impl<G: Guard> MutationError<G> {
-    /// Get inner error.
-    pub fn into_inner(self) -> <G::Bound as Bound>::Error {
-        self.inner
-    }
-}
-
-impl<G> fmt::Display for MutationError<G>
+impl<B> fmt::Display for MutationError<B>
 where
-    G: Guard,
-    <G::Bound as Bound>::Error: fmt::Display,
+    B: Bound,
+    B::Error: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "failed to mutate {} from value {:?} to {:?}: {}",
-            std::any::type_name::<G>(),
+            "failed to mutate type {} from value {:?} to value {:?}: {}",
+            B::TYPE_NAME,
             self.old_value,
             self.new_value,
             self.inner,
@@ -212,97 +323,49 @@ where
     }
 }
 
-impl<G> error::Error for MutationError<G>
+impl<B> Error for MutationError<B>
 where
-    G: Guard + fmt::Debug,
-    G::Bound: fmt::Debug,
-    <G::Bound as Bound>::Error: fmt::Display,
+    B: Bound + fmt::Debug,
+    B::Error: fmt::Display,
 {
+    // NOTE: `self.inner` could be used for `source` function.
+    // However, it would require `B::Error: Error + 'static`,
+    // which is more restrictive, and therefore less appealing.
+    // It's also not clear for me if this change would be
+    // useful.
+    // Waiting for the stabilization of specialization?
 }
 
-impl<B> Clone for Guarded<B>
-where
-    B: Bound,
-    B::Target: Clone,
-{
-    fn clone(&self) -> Self {
-        todo!()
-    }
+/// Convenience trait that allows mapping from `Result<_,
+/// ConstructionError<Bound>>` and `Result<_, MutationError<Bound>` to
+/// `Result<_, Bound::Error>`.
+pub trait MapInnerError<O, E> {
+    fn map_inner(self) -> Result<O, E>;
 }
 
-impl<B: Bound> AsRef<B::Target> for Guarded<B> {
-    fn as_ref(&self) -> &B::Target {
-        &self.0
-    }
-}
-
-impl<B: Bound> Deref for Guarded<B> {
-    type Target = B::Target;
-    fn deref(&self) -> &B::Target {
-        &self.0
-    }
-}
-
-impl<B> PartialEq for Guarded<B>
+impl<O, B> MapInnerError<O, B::Error> for Result<O, ConstructionError<B>>
 where
     B: Bound,
-    B::Target: PartialEq,
 {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
+    fn map_inner(self) -> Result<O, B::Error> {
+        self.map_err(|err| err.inner)
     }
 }
 
-impl<B: Bound> Eq for Guarded<B> where B::Target: Eq {}
-
-impl<B> PartialOrd for Guarded<B>
+impl<O, B> MapInnerError<O, B::Error> for Result<O, MutationError<B>>
 where
     B: Bound,
-    B::Target: PartialOrd,
 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl<B> Ord for Guarded<B>
-where
-    B: Bound,
-    B::Target: Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl<B: Bound> Copy for Guarded<B> where B::Target: Copy {}
-
-impl<B> Hash for Guarded<B>
-where
-    B: Bound,
-    B::Target: Hash,
-{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
-    }
-}
-
-impl<U, B> Index<U> for Guarded<B>
-where
-    B: Bound,
-    B::Target: Index<U>,
-{
-    type Output = <B::Target as Index<U>>::Output;
-    fn index(&self, index: U) -> &Self::Output {
-        self.0.index(index)
+    fn map_inner(self) -> Result<O, B::Error> {
+        self.map_err(|err| err.inner)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, B> serde::Deserialize<'de> for Guarded<B>
+impl<'de, T, B> serde::Deserialize<'de> for Bounded<T, B>
 where
-    B: Bound + fmt::Debug,
-    B::Target: serde::Deserialize<'de> + std::fmt::Debug,
+    T: serde::Deserialize<'de> + std::fmt::Debug,
+    B: Bound<Target = T> + fmt::Debug,
     B::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -315,10 +378,10 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<B> serde::Serialize for Guarded<B>
+impl<T, B> serde::Serialize for Bounded<T, B>
 where
-    B: Bound,
-    B::Target: serde::Serialize,
+    T: serde::Serialize,
+    B: Bound<Target = T>,
     B::Error: std::fmt::Display + std::fmt::Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

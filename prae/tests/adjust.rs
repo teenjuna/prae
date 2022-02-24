@@ -1,5 +1,3 @@
-use prae::Guard;
-
 prae::define! {
     Username: String
     adjust |u| *u = u.trim().to_owned()
@@ -14,6 +12,6 @@ fn construction_adjusted() {
 #[test]
 fn mutation_adjusted() {
     let mut u = Username::new("something").unwrap();
-    u.mutate(|u| *u = "  something new   ".to_owned());
+    u.mutate(|u| *u = "  something new   ".to_owned()).unwrap();
     assert_eq!(u.get(), "something new");
 }
