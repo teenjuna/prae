@@ -16,7 +16,7 @@ effort**.
 The main way to use `prae` is through [`define!`](https://docs.rs/prae/latest/prae/macro.define.html) macro.
 
 For example, suppose you want to create a `Username` type. You want this
-type to be a string, and you don't want it to be empty. Traditionally, would
+type to be a string, and you don't want it to be empty. Traditionally, you would
 create a wrapper struct with getter and setter functions, like this
 simplified example:
 ```rust
