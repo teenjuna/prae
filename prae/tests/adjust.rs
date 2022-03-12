@@ -1,6 +1,9 @@
+use prae::Wrapper;
+
 prae::define! {
-    Username: String
-    adjust |u| *u = u.trim().to_owned()
+    #[derive(Debug)]
+    Username: String;
+    adjust |u| *u = u.trim().to_owned();
 }
 
 #[test]

@@ -1,5 +1,6 @@
 #[cfg(feature = "serde")]
 mod tests {
+    use prae::Wrapper;
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -8,9 +9,13 @@ mod tests {
     }
 
     prae::define! {
-        Username: String
-        adjust |u| *u = u.trim().to_owned()
-        ensure |u| !u.is_empty()
+        #[derive(Debug)]
+        Username: String;
+        adjust |u| *u = u.trim().to_owned();
+        ensure |u| !u.is_empty();
+        plugins: [
+            prae::impl_serde
+        ]
     }
 
     #[test]

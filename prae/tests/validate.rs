@@ -1,5 +1,5 @@
 use assert_matches::assert_matches;
-use prae::MapInnerError;
+use prae::{MapInnerError, Wrapper};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UsernameError;
@@ -11,14 +11,15 @@ impl std::fmt::Display for UsernameError {
 }
 
 prae::define! {
-    pub Username: String
+    #[derive(Debug)]
+    pub Username: String;
     validate(UsernameError) |u| {
         if u.is_empty() {
             Err(UsernameError{})
         } else {
             Ok(())
         }
-    }
+    };
 }
 
 #[test]

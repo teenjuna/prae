@@ -1,34 +1,37 @@
+use prae::Wrapper;
+
 prae::define! {
-    Text: String
-    adjust |t| *t = t.trim().to_owned()
+    #[derive(Debug)]
+    Text: String;
+    adjust |t| *t = t.trim().to_owned();
     validate(&'static str) |t| {
         if t.is_empty() {
             Err("provided text is empty")
         } else {
             Ok(())
         }
-    }
+    };
 }
 
-prae::define! {
-    CapText: String
-    extend TextBound
+prae::extend! {
+    #[derive(Debug)]
+    CapText: Text;
     adjust |t| {
        let mut cs = t.chars();
        *t = cs.next().unwrap().to_uppercase().collect::<String>() + cs.as_str();
-    }
+    };
 }
 
-prae::define! {
-    Sentence: String
-    extend CapTextBound
+prae::extend! {
+    #[derive(Debug)]
+    Sentence: CapText;
     validate(String) |s| {
         if s.ends_with(&['.', '!', '?'][..]) {
             Ok(())
         } else {
             Err("provided sentence has no ending punctuation mark".to_owned())
         }
-    }
+    };
 }
 
 #[test]
