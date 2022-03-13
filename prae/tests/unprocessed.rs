@@ -1,8 +1,10 @@
 #[cfg(feature = "unprocessed")]
 mod tests {
+    use prae::Wrapper;
+
     prae::define! {
-        pub Username: String
-        ensure |u| !u.is_empty()
+        pub Username: String;
+        ensure |u| !u.is_empty();
     }
 
     #[test]

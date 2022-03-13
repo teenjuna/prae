@@ -1,8 +1,10 @@
 use assert_matches::assert_matches;
+use prae::Wrapper;
 
 prae::define! {
-    pub Username: String
-    ensure |u| !u.is_empty()
+    #[derive(Debug)]
+    pub Username: String;
+    ensure |u| !u.is_empty();
 }
 
 #[test]
