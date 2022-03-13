@@ -3,7 +3,7 @@
 mod core;
 pub use crate::core::*;
 
-/// Convenience macro that generates a
+/// Convenience macro that creates a
 /// [`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
 /// wrapper struct that implements [`prae::Wrapper`](crate::Wrapper).
 ///
@@ -19,7 +19,7 @@ pub use crate::core::*;
 /// - Attribute macros attached to the type signature (e.g. `#[derive(Debug)]`);
 /// - Type plugins specified in the end of the macro.
 ///
-/// It is worth noting that the inner value of generated `Newtype` struct can be
+/// It is worth noting that the inner value of created `Newtype` struct can be
 /// accessed from the code in the same module. To fully protect this value from
 /// being accessed directly, put your type in a separate module.
 ///
@@ -35,7 +35,7 @@ pub use crate::core::*;
 /// ## Type signature
 ///
 /// This is the only required argument of the macro. It specifies the visibiliy
-/// and the name of the generated struct, as well as it's inner type. For
+/// and the name of the created struct, as well as it's inner type. For
 /// example, this
 /// ```
 /// prae::define! {
@@ -239,7 +239,7 @@ pub use crate::core::*;
 /// ```
 /// To avoid this, we need to add a custom implementation of
 /// [`serde::Deserialize`](::serde::Deserialize) for our type. Since the
-/// implementation is indentical for any type generated with this crate, `prae`
+/// implementation is indentical for any type created with this crate, `prae`
 /// ships with a built-in (under `serde` feature) plugin called
 /// [`impl_serde`](crate::impl_serde). This plugin will implement both
 /// [`serde::Serialize`](::serde::Serialize) and
@@ -267,7 +267,6 @@ pub use crate::core::*;
 /// assert_eq!(err.to_string(), "value is invalid");
 /// ```
 /// You can implement your own plugins and use them for your types - it's easy.
-
 #[macro_export]
 macro_rules! define {
     // Required part:
@@ -358,6 +357,49 @@ macro_rules! define {
     }
 }
 
+/// Convenience macro that creates a
+/// [`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
+/// wrapper struct that implements [`prae::Wrapper`](crate::Wrapper) and extends
+/// another [`prae::Wrapper`](crate::Wrapper).
+///
+/// The usage of the macro is identical to the [`define!`](crate::define), so
+/// check out it's documentation to learn more. The only difference is the fact
+/// that the inner type specified in the type signature must implement
+/// [`prae::Wrapper`](crate::Wrapper).
+///
+/// The created struct will inherit the inner type of that another wrapper, and
+/// also will run that another wrapper's adjustment and validation closures
+/// before it's own adjustment and validation closures. For example:
+/// ```
+/// use prae::Wrapper;
+///
+/// prae::define! {
+///     pub Text: String;
+///     adjust |text| *text = text.trim().to_owned();
+///     ensure |text| !text.is_empty();
+/// }
+///
+/// prae::extend! {
+///     pub Sentence: Text;
+///     ensure |sentence: &String| {
+///         // Note that `sentence` is a `&String`, not `&Text`!
+///         // It's value is already trimmed and checked for emptiness.
+///         // Now we only need to check conditions that are important
+///         // for the new type
+///         sentence.ends_with(&['.', '!', '?'][..])
+///     };
+/// }
+///
+/// // It works
+/// let sentence = Sentence::new("   My sentence! ").unwrap();
+/// assert_eq!(sentence.get(), "My sentence!");
+///
+/// // Doesn't pass the validation of `Text`
+/// assert!(Sentence::new("   ").is_err());
+///
+/// // Doesn't pass the validation of `Sentence`
+/// assert!(Sentence::new("Without punctuation").is_err());
+/// ```
 #[macro_export]
 macro_rules! extend {
     // Required part:
@@ -422,12 +464,12 @@ macro_rules! extend {
                 let adjust: fn(&mut Self::Inner) = $adjust;
                 adjust(&mut _v);
             })?
-            $({
+            {
                 let ensure: fn(&Self::Inner) -> bool = $ensure;
                 if !ensure(&_v) {
                     return Err("value is invalid")
                 }
-            })?
+            }
             Ok(())
         };
     };
