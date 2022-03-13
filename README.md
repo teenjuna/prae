@@ -1,5 +1,9 @@
 # prae
 
+[![crates.io version](https://shields.io/crates/v/prae)](https://crates.io/crates/prae)
+[![docs.rs](https://docs.rs/prae/badge.svg)](https://docs.rs/prae)
+[![crates.io license](https://shields.io/crates/l/prae)](https://crates.io/crates/prae)
+
 `prae` is a crate that aims to provide a better way to define types that
 require validation.
 
@@ -89,18 +93,18 @@ zero impact on the compilation speed.
 If you find yourself in a situation where the internal adjustment and
 validation of your type becomes a performance bottleneck (for example, you
 perform a heavy validation and mutate your type in a hot loop) - try
-`_unprocessed` variants of [`Wrapper`] methods. They won't call
-[`Wrapper::PROCESS`]. However, I strongly advise you to call
-[`Wrapper::verify`] after such operations.
+`_unprocessed` variants of `Wrapper` methods. They won't call
+`Wrapper::PROCESS`. However, I strongly advise you to call
+`Wrapper::verify` after such operations.
 
 ## Feature flags
 
 `prae` provides additional features:
 
-| Name          | Description                                     |
-| ------------- | ----------------------------------------------- |
-| `serde`       | Adds the [`impl_serde`] plugin.                 |
-| `unprocessed` | Adds the `_unprocessed` methods to [`Wrapper`]. |
+| Name          | Description                                   |
+| ------------- | --------------------------------------------- |
+| `serde`       | Adds the `impl_serde` plugin.                 |
+| `unprocessed` | Adds the `_unprocessed` methods to `Wrapper`. |
 
 ## Credits
 
