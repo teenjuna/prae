@@ -1,16 +1,115 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+//! `prae` is a crate that aims to provide a better way to define types that
+//! require validation.
+//!
+//! The main concept of the library is the [`Wrapper`](crate::Wrapper) trait.
+//! This trait describes a
+//! [`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
+//! wrapper struct that contains some inner value and provides methods to
+//! construct, read and mutate it.
+//!
+//! The easiest way to create a type that implements [`Wrapper`](crate::Wrapper)
+//! is to use [`define!`](crate::define) and [`extend!`](crate::extend) macros.
+//!
+//! # Example
+//! Suppose you want to create a type `Username`. You want this type to be a
+//! `String`, and you don't want it to be empty. Traditionally, you would create
+//! a wrapper struct with getter and setter functions, like this simplified
+//! example:
+//! ```
+//! #[derive(Debug)]
+//! pub struct Username(String);
+//!
+//! impl Username {
+//!     pub fn new(username: &str) -> Result<Self, &'static str> {
+//!         let username = username.trim().to_owned();
+//!         if username.is_empty() {
+//!             Err("value is invalid")
+//!         } else {
+//!             Ok(Self(username))
+//!         }
+//!     }
+//!
+//!     pub fn get(&self) -> &str {
+//!         &self.0
+//!     }
+//!
+//!     pub fn set(&mut self, username: &str) -> Result<(), &'static str> {
+//!         let username = username.trim().to_owned();
+//!         if username.is_empty() {
+//!             Err("value is invalid")
+//!         } else {
+//!             self.0 = username;
+//!             Ok(())
+//!         }
+//!    }
+//! }
+//!
+//! let username = Username::new(" my username ").unwrap();
+//! assert_eq!(username.get(), "my username");
+//!
+//! let err = Username::new("  ").unwrap_err();
+//! assert_eq!(err, "value is invalid");
+//! ```
+//!
+//! Using `prae`, you will do it like this:
+//! ```
+//! use prae::Wrapper;
+//!
+//! prae::define! {
+//!     #[derive(Debug)]
+//!     pub Username: String;
+//!     adjust |username| *username = username.trim().to_owned();
+//!     ensure |username| !username.is_empty();
+//! }
+//!
+//! let username = Username::new(" my username ").unwrap();
+//! assert_eq!(username.get(), "my username");
+//!
+//! let err = Username::new("  ").unwrap_err();
+//! assert_eq!(err.original, "value is invalid");
+//! assert_eq!(err.value, "");
+//! ```
+//!
+//! Futhermore, `prae` allows you to use custom errors and extend your types.
+//! See docs for [`define!`](crate::define) and [`extend!`](crate::define) for
+//! more information and examples.
+//!
+//! # Compilation speed
+//!
+//! The macros provided by this crate are declarative, therefore make almost
+//! zero impact on the compilation speed.
+//!
+//! # Performarnce impact
+//!
+//! If you find yourself in a situation where the internal adjustment and
+//! validation of your type becomes a performance bottleneck (for example, you
+//! perform a heavy validation and mutate your type in a hot loop) - try
+//! `_unprocessed` variants of [`Wrapper`] methods. They won't call
+//! [`Wrapper::PROCESS`]. However, I strongly advise you to call
+//! [`Wrapper::verify`] after such operations.
+//!
+//! # Feature flags
+//!
+//!  `prae` provides additional features:
+//!
+//!  Name | Description
+//!  ---|---
+//!  `serde` | Adds the [`impl_serde`] plugin.
+//!  `unprocessed` | Adds the `_unprocessed` methods to [`Wrapper`].
+
 mod core;
 pub use crate::core::*;
 
 /// Convenience macro that creates a
 /// [`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
-/// wrapper struct that implements [`prae::Wrapper`](crate::Wrapper).
+/// wrapper struct that implements [`Wrapper`].
 ///
 /// The macro accepts several arguments (see [macro structure](#macro-structure)
 /// for more info). By default, it generates a bare minimum of code:
 /// - The `Newtype` struct;
-/// - The implementation of the [`Wrapper`](crate::Wrapper) for the struct;
+/// - The implementation of the [`Wrapper`] for the struct;
 /// - The implementation of the [`AsRef`](AsRef);
 /// [`Borrow`](std::borrow::Borrow),
 /// [`TryFrom`](TryFrom) and [`From`](From) traits for the struct.
@@ -120,7 +219,7 @@ pub use crate::core::*;
 /// and returns `true` if the value is valid, and `false` if it's not.
 ///
 /// This closure is easy to use, but it has a downside: you can't customize your
-/// error type. The [`Wrapper::Error`](crate::Wrapper::Error) type will always
+/// error type. The [`Wrapper::Error`] type will always
 /// be a `&'static str` with a generic error message:
 /// ```
 /// # use prae::Wrapper;
@@ -241,7 +340,7 @@ pub use crate::core::*;
 /// [`serde::Deserialize`](::serde::Deserialize) for our type. Since the
 /// implementation is indentical for any type created with this crate, `prae`
 /// ships with a built-in (under `serde` feature) plugin called
-/// [`impl_serde`](crate::impl_serde). This plugin will implement both
+/// [`impl_serde`]. This plugin will implement both
 /// [`serde::Serialize`](::serde::Serialize) and
 /// [`serde::Deserialize`](::serde::Deserialize) the right way:
 /// ```
@@ -359,13 +458,12 @@ macro_rules! define {
 
 /// Convenience macro that creates a
 /// [`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
-/// wrapper struct that implements [`prae::Wrapper`](crate::Wrapper) and extends
-/// another [`prae::Wrapper`](crate::Wrapper).
+/// wrapper struct that implements [`Wrapper`] and extends another [`Wrapper`].
 ///
 /// The usage of the macro is identical to the [`define!`](crate::define), so
 /// check out it's documentation to learn more. The only difference is the fact
 /// that the inner type specified in the type signature must implement
-/// [`prae::Wrapper`](crate::Wrapper).
+/// [`Wrapper`].
 ///
 /// The created struct will inherit the inner type of that another wrapper, and
 /// also will run that another wrapper's adjustment and validation closures
@@ -380,6 +478,7 @@ macro_rules! define {
 /// }
 ///
 /// prae::extend! {
+///     #[derive(Debug)]
 ///     pub Sentence: Text;
 ///     ensure |sentence: &String| {
 ///         // Note that `sentence` is a `&String`, not `&Text`!
@@ -438,7 +537,6 @@ macro_rules! extend {
         $inner:ty;
         $(adjust $adjust:expr;)?
     } => {
-        // type Error = <$inner as $crate::Wrapper>::Error;
         type Error = &'static str;
         const PROCESS: fn(&mut Self::Inner) -> Result<(), Self::Error> = |mut _v| {
             <$inner as $crate::Wrapper>::PROCESS(&mut _v)?;
