@@ -56,7 +56,16 @@ pub trait Wrapper: Sized {
         self.__mutate_with(Self::Inner::clone, f)
     }
 
-    /// TODO: describe the purpose of this method.
+    /// This is a helper method that should be implemented in order for `mutate`
+    /// method to work in a generic way. This method should not be used directly
+    /// by the user (hence `#[doc(hidden)]` and a weird name).
+    ///
+    /// Using this method, we allowing the trait to be implemented for both
+    /// `Clone` and `!Clone` types. `Clone` types will have the `mutate` method,
+    /// while the `!Clone` types won't.
+    ///
+    /// The idea for this method originated here:
+    /// https://users.rust-lang.org/t/is-it-possible-to-implement-trait-method-with-where-clause-on-a-concrete-type/72846/12?u=teenjuna
     #[doc(hidden)]
     fn __mutate_with(
         &mut self,
@@ -90,17 +99,20 @@ pub trait Wrapper: Sized {
     fn verify(self) -> Result<Self, VerificationError<Self>>;
 }
 
-/// A wrapper-error that can occur during construction (with
-/// [`Wrapper::new`](crate::Wrapper::new)) or mutation (with
-/// [`Wrapper::set`](crate::Wrapper::set)) of the wrapper.
+/// A wrapper-error that will be returned if the
+/// [`Wrapper::new`](crate::Wrapper::new) or
+/// [`Wrapper::set`](crate::Wrapper::set) methods receive a value that doesn't
+/// pass [`Wrapper::PROCESS`](crate::Wrapper::PROCESS) function.
 ///
-/// Contains both the original error and the value that caused it.
+/// This wrapper contains both the value that caused the error and the original
+/// error returned by the [`Wrapper::PROCESS`](crate::Wrapper::PROCESS)
+/// function.
 #[derive(Debug)]
 pub struct ConstructionError<W: Wrapper> {
     /// Value that caused the error.
     pub value: W::Inner,
     /// Original error.
-    pub inner: W::Error,
+    pub original: W::Error,
 }
 
 impl<W> fmt::Display for ConstructionError<W>
@@ -115,7 +127,7 @@ where
             "failed to construct type {} from value {:?}: {}",
             W::NAME,
             self.value,
-            self.inner,
+            self.original,
         )
     }
 }
@@ -134,19 +146,22 @@ where
     // Waiting for the stabilization of specialization?
 }
 
-/// A wrapper-error that can occur during mutation (with
-/// [`Wrapper::mutate`](crate::Wrapper::mutate)) of the wrapper.
+/// A wrapper-error that will be returned if the
+/// [`Wrapper::mutate`](crate::Wrapper::mutate) method receives a closure that
+/// mutates the inner value in such a way that it no longer passes
+/// the [`Wrapper::PROCESS`](crate::Wrapper::PROCESS) function.
 ///
-/// Contains the original error, old value and the new value that caused the
-/// error.
+/// This wrapper contains the mutated value that caused the error, the
+/// value before the mutation and the original error returned by
+/// [`Wrapper::PROCESS`](crate::Wrapper::PROCESS) function.
 #[derive(Debug)]
 pub struct MutationError<W: Wrapper> {
     /// Value before the mutation.
     pub old_value: W::Inner,
-    /// Value after mutation (that caused the error).
+    /// Value after mutation (the cause of the error).
     pub new_value: W::Inner,
     /// Original error.
-    pub inner: W::Error,
+    pub original: W::Error,
 }
 
 impl<W> fmt::Display for MutationError<W>
@@ -162,7 +177,7 @@ where
             W::NAME,
             self.old_value,
             self.new_value,
-            self.inner,
+            self.original,
         )
     }
 }
@@ -175,16 +190,20 @@ where
 {
 }
 
-/// A wrapper-error that can occur during verification (with
-/// [`Wrapper::veirfy`](crate::Wrapper::verify)) of the wrapper.
+/// A wrapper-error that will be returned if the
+/// [`Wrapper::verify`](crate::Wrapper::verify) method is called on a wrapper
+/// whose inner value no longer passes the
+/// [`Wrapper::PROCESS`](crate::Wrapper::PROCESS) function.
 ///
-/// Contains both the original error and the value that caused it.
+/// This wrapper contains both the value that caused the error and the original
+/// error returned by the [`Wrapper::PROCESS`](crate::Wrapper::PROCESS)
+/// function.
 #[derive(Debug)]
 pub struct VerificationError<W: Wrapper> {
     /// Value that caused the error.
     pub value: W::Inner,
     /// Original error.
-    pub inner: W::Error,
+    pub original: W::Error,
 }
 
 impl<W> fmt::Display for VerificationError<W>
@@ -199,7 +218,7 @@ where
             "verification of type {} with value {:?} failed: {}",
             W::NAME,
             self.value,
-            self.inner,
+            self.original,
         )
     }
 }
@@ -214,25 +233,25 @@ where
 
 /// Convenience trait that allows mapping from `Result<_,
 /// ConstructionError<Wrapper>>`, `Result<_, MutationError<Wrapper>` and
-/// `Result<_, VerificationError<Wrapper>> to `Result<_, Wrapper::Error>`.
-pub trait MapInnerError<O, E> {
-    fn map_inner(self) -> Result<O, E>;
+/// `Result<_, VerificationError<Wrapper>>` to `Result<_, Wrapper::Error>`.
+pub trait MapOriginalError<O, E> {
+    fn map_original(self) -> Result<O, E>;
 }
 
-impl<O, W: Wrapper> MapInnerError<O, W::Error> for Result<O, ConstructionError<W>> {
-    fn map_inner(self) -> Result<O, W::Error> {
-        self.map_err(|err| err.inner)
+impl<O, W: Wrapper> MapOriginalError<O, W::Error> for Result<O, ConstructionError<W>> {
+    fn map_original(self) -> Result<O, W::Error> {
+        self.map_err(|err| err.original)
     }
 }
 
-impl<O, W: Wrapper> MapInnerError<O, W::Error> for Result<O, MutationError<W>> {
-    fn map_inner(self) -> Result<O, W::Error> {
-        self.map_err(|err| err.inner)
+impl<O, W: Wrapper> MapOriginalError<O, W::Error> for Result<O, MutationError<W>> {
+    fn map_original(self) -> Result<O, W::Error> {
+        self.map_err(|err| err.original)
     }
 }
 
-impl<O, W: Wrapper> MapInnerError<O, W::Error> for Result<O, VerificationError<W>> {
-    fn map_inner(self) -> Result<O, W::Error> {
-        self.map_err(|err| err.inner)
+impl<O, W: Wrapper> MapOriginalError<O, W::Error> for Result<O, VerificationError<W>> {
+    fn map_original(self) -> Result<O, W::Error> {
+        self.map_err(|err| err.original)
     }
 }

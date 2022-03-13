@@ -1,5 +1,5 @@
 use assert_matches::assert_matches;
-use prae::{MapInnerError, Wrapper};
+use prae::{MapOriginalError, Wrapper};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UsernameError;
@@ -44,7 +44,7 @@ fn mutation_error_formats_correctly() {
 #[test]
 fn construction_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
-        Username::new("").map_inner()?;
+        Username::new("").map_original()?;
         Ok(())
     }();
 }
@@ -53,7 +53,7 @@ fn construction_error_can_be_transormed_into_inner() {
 fn mutation_error_can_be_transormed_into_inner() {
     let _err = || -> Result<(), UsernameError> {
         let mut un = Username::new("user").unwrap();
-        un.mutate(|u| *u = "".to_owned()).map_inner()?;
+        un.mutate(|u| *u = "".to_owned()).map_original()?;
         Ok(())
     }();
 }
@@ -62,7 +62,7 @@ fn mutation_error_can_be_transormed_into_inner() {
 fn construction_fails_for_invalid_data() {
     assert_matches!(
         Username::new(""),
-        Err(prae::ConstructionError { inner, .. }) if inner == UsernameError {}
+        Err(prae::ConstructionError { original, .. }) if original == UsernameError {}
     );
 }
 
@@ -77,7 +77,7 @@ fn mutation_fails_for_invalid_data() {
     let mut un = Username::new("user").unwrap();
     assert_matches!(
         un.mutate(|u| *u = "".to_owned()),
-        Err(prae::MutationError { inner, .. }) if inner == UsernameError {}
+        Err(prae::MutationError { original, .. }) if original == UsernameError {}
     );
 }
 

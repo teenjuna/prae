@@ -40,7 +40,7 @@ fn extended_works() {
     assert_eq!(t.get(), "A couple of words");
 
     let e = CapText::new(" ").unwrap_err();
-    assert_eq!(e.inner, "provided text is empty");
+    assert_eq!(e.original, "provided text is empty");
 }
 
 #[test]
@@ -49,8 +49,11 @@ fn double_extended_works() {
     assert_eq!(t.get(), "A sentence.");
 
     let e = Sentence::new(" ").unwrap_err();
-    assert_eq!(e.inner, "provided text is empty");
+    assert_eq!(e.original, "provided text is empty");
 
     let e = Sentence::new(" a sentence ").unwrap_err();
-    assert_eq!(e.inner, "provided sentence has no ending punctuation mark");
+    assert_eq!(
+        e.original,
+        "provided sentence has no ending punctuation mark"
+    );
 }

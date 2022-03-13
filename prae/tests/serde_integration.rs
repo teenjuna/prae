@@ -15,7 +15,7 @@ mod tests {
         ensure |u| !u.is_empty();
         plugins: [
             prae::impl_serde
-        ]
+        ];
     }
 
     #[test]
