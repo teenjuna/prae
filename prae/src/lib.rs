@@ -98,6 +98,12 @@
 //!  ---|---
 //!  `serde` | Adds the [`impl_serde`] plugin.
 //!  `unprocessed` | Adds the `_unprocessed` methods to [`Wrapper`].
+//!
+//! # Credits
+//! This crate was highly inspired by the
+//! [tightness](https://github.com/PabloMansanet/tightness) crate. It's basically
+//! just a fork of tightness with a slightly different philosophy.
+//! See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
 
 mod core;
 pub use crate::core::*;
