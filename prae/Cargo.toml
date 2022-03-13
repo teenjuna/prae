@@ -1,6 +1,6 @@
 [package]
 name = "prae"
-version = "0.7.4"
+version = "0.8.0"
 edition = "2021"
 authors = ["Alex Ryapolov <ryapolov@pm.me>"]
 license = "Unlicense"
