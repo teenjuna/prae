@@ -106,6 +106,7 @@
 //! See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
 
 mod core;
+mod plugins;
 pub use crate::core::*;
 
 /// Convenience macro that creates a
@@ -117,7 +118,7 @@ pub use crate::core::*;
 /// - The `Newtype` struct;
 /// - The implementation of the [`Wrapper`] for the struct;
 /// - The implementation of the [`AsRef`](AsRef);
-/// [`Borrow`](std::borrow::Borrow),
+/// [`Borrow`](::core::borrow::Borrow),
 /// [`TryFrom`](TryFrom) and [`From`](From) traits for the struct.
 ///
 /// However, the generated code can be extended in using two methods:
@@ -254,7 +255,7 @@ pub use crate::core::*;
 /// This closure is similar to the [`ensure` closure](#ensure-closure), but uses
 /// custom error specified by the user:
 /// ```
-/// use std::fmt;
+/// use ::core::fmt;
 /// use prae::Wrapper;
 ///
 /// #[derive(Debug)]
@@ -407,7 +408,7 @@ macro_rules! define {
     {
         $(adjust $adjust:expr;)?
     } => {
-        type Error = std::convert::Infallible;
+        type Error = ::core::convert::Infallible;
         const PROCESS: fn(&mut Self::Inner) -> Result<(), Self::Error> = |mut _v| {
             $({
                 let adjust: fn(&mut Self::Inner) = $adjust;
@@ -683,69 +684,25 @@ macro_rules! __impl_wrapper_methods {
 #[macro_export]
 macro_rules! __impl_external_traits {
     ($wrapper:ident, $inner:ty) => {
-        impl std::convert::AsRef<$inner> for $wrapper {
+        impl ::core::convert::AsRef<$inner> for $wrapper {
             fn as_ref(&self) -> &$inner {
                 &self.0
             }
         }
-        impl std::borrow::Borrow<$inner> for $wrapper {
+        impl ::core::borrow::Borrow<$inner> for $wrapper {
             fn borrow(&self) -> &$inner {
                 &self.0
             }
         }
-        impl std::convert::TryFrom<$inner> for $wrapper {
+        impl ::core::convert::TryFrom<$inner> for $wrapper {
             type Error = $crate::ConstructionError<$wrapper>;
             fn try_from(value: $inner) -> Result<Self, Self::Error> {
                 <$wrapper as $crate::Wrapper>::new(value)
             }
         }
-        impl std::convert::From<$wrapper> for $inner {
+        impl ::core::convert::From<$wrapper> for $inner {
             fn from(wrapper: $wrapper) -> Self {
                 wrapper.0
-            }
-        }
-    };
-}
-
-/// Implement [`serde::Serialize`](::serde::Serialize) and
-/// [`serde::Deserialize`](::serde::Deserialize) for the wrapper. Deserilization
-/// will fail if the value doesn't pass wrapper's
-/// [`PROCESS`](crate::Wrapper::PROCESS) function.
-///
-/// For this to work, the inner type of the wrapper must also implement these
-/// traits.
-#[cfg(feature = "serde")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-#[macro_export]
-macro_rules! impl_serde {
-    ($wrapper:ident) => {
-        impl<'de> ::serde::Deserialize<'de> for $wrapper
-        where
-            Self: $crate::Wrapper + std::fmt::Debug,
-            <Self as $crate::Wrapper>::Inner: ::serde::Deserialize<'de> + std::fmt::Debug,
-            <Self as $crate::Wrapper>::Error: std::fmt::Display + std::fmt::Debug,
-        {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: ::serde::Deserializer<'de>,
-            {
-                <Self as $crate::Wrapper>::new(<Self as $crate::Wrapper>::Inner::deserialize(
-                    deserializer,
-                )?)
-                .map_err(|err| ::serde::de::Error::custom(err.original))
-            }
-        }
-        impl ::serde::Serialize for $wrapper
-        where
-            Self: $crate::Wrapper + std::fmt::Debug,
-            <Self as $crate::Wrapper>::Inner: ::serde::Serialize,
-            <Self as $crate::Wrapper>::Error: std::fmt::Display + std::fmt::Debug,
-        {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: ::serde::Serializer,
-            {
-                <Self as $crate::Wrapper>::Inner::serialize(&self.0, serializer)
             }
         }
     };
