@@ -1,9 +1,11 @@
 use assert_matches::assert_matches;
+use prae::Wrapper;
 
 prae::define! {
-    pub Username: String
-    adjust |u| *u = u.trim().to_owned()
-    ensure |u| !u.is_empty()
+    #[derive(Debug)]
+    pub Username: String;
+    adjust |u| *u = u.trim().to_owned();
+    ensure |u| !u.is_empty();
 }
 
 #[test]

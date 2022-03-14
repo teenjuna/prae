@@ -4,21 +4,25 @@
 [![docs.rs](https://docs.rs/prae/badge.svg)](https://docs.rs/prae)
 [![crates.io license](https://shields.io/crates/l/prae)](https://crates.io/crates/prae)
 
-# What is prae?
+`prae` is a crate that aims to provide a better way to define types that
+require validation.
 
-This crate aims to provide a better way to define types that require
-validation. `prae` **is not** a validation library, but a library that
-**helps developers** to define validation-requiring types with **very little
-effort**.
+The main concept of the library is the [`Wrapper`](crate::Wrapper) trait.
+This trait describes a
+[`Newtype`](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html)
+wrapper struct that contains some inner value and provides methods to
+construct, read and mutate it.
 
-# How it works?
+The easiest way to create a type that implements [`Wrapper`](crate::Wrapper)
+is to use [`define!`](crate::define) and [`extend!`](crate::extend) macros.
 
-The main way to use `prae` is through [`define!`](https://docs.rs/prae/latest/prae/macro.define.html) macro.
+## Example
 
-For example, suppose you want to create a `Username` type. You want this
-type to be a string, and you don't want it to be empty. Traditionally, you would
-create a wrapper struct with getter and setter functions, like this
-simplified example:
+Suppose you want to create a type `Username`. You want this type to be a
+`String`, and you don't want it to be empty. Traditionally, you would create
+a wrapper struct with getter and setter functions, like this simplified
+example:
+
 ```rust
 #[derive(Debug)]
 pub struct Username(String);
@@ -56,25 +60,57 @@ assert_eq!(err, "value is invalid");
 ```
 
 Using `prae`, you will do it like this:
-```rust
-use prae::define;
 
-define! {
-    pub Username: String
-    adjust |username| *username = username.trim().to_owned()
-    ensure |username| !username.is_empty()
+```rust
+use prae::Wrapper;
+
+prae::define! {
+    #[derive(Debug)]
+    pub Username: String;
+    adjust |username| *username = username.trim().to_owned();
+    ensure |username| !username.is_empty();
 }
 
 let username = Username::new(" my username ").unwrap();
 assert_eq!(username.get(), "my username");
 
 let err = Username::new("  ").unwrap_err();
-assert_eq!(err.inner, "value is invalid");
+assert_eq!(err.original, "value is invalid");
 assert_eq!(err.value, "");
 ```
 
 Futhermore, `prae` allows you to use custom errors and extend your types.
-See [docs](https://docs.rs/prae/latest/prae/index.html) for more information and examples.
+See docs for [`define!`](crate::define) and [`extend!`](crate::define) for
+more information and examples.
 
-# Credits
-This crate was highly inspired by the [tightness](https://github.com/PabloMansanet/tightness) crate. It's basically just a fork of tightness with a slightly different philosophy. See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
+## Compilation speed
+
+The macros provided by this crate are declarative, therefore make almost
+zero impact on the compilation speed.
+
+## Performarnce impact
+
+If you find yourself in a situation where the internal adjustment and
+validation of your type becomes a performance bottleneck (for example, you
+perform a heavy validation and mutate your type in a hot loop) - try
+`_unprocessed` variants of `Wrapper` methods. They won't call
+`Wrapper::PROCESS`. However, I strongly advise you to call
+`Wrapper::verify` after such operations.
+
+## Feature flags
+
+`prae` provides additional features:
+
+| Name          | Description                                   |
+| ------------- | --------------------------------------------- |
+| `serde`       | Adds the `impl_serde` plugin.                 |
+| `unprocessed` | Adds the `_unprocessed` methods to `Wrapper`. |
+
+## Credits
+
+This crate was highly inspired by the
+[tightness](https://github.com/PabloMansanet/tightness) crate. It's basically
+just a fork of tightness with a slightly different philosophy.
+See [this](https://github.com/PabloMansanet/tightness/issues/2) issue for details.
+
+License: Unlicense

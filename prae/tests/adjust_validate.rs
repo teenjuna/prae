@@ -1,18 +1,20 @@
 use assert_matches::assert_matches;
+use prae::Wrapper;
 
 #[derive(Debug)]
 pub struct UsernameError;
 
 prae::define! {
-    pub Username: String
-    adjust   |u| *u = u.trim().to_owned()
+    #[derive(Debug)]
+    pub Username: String;
+    adjust   |u| *u = u.trim().to_owned();
     validate(UsernameError) |u| {
         if u.is_empty() {
             Err(UsernameError)
         } else {
             Ok(())
         }
-    }
+    };
 }
 
 #[test]
