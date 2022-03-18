@@ -650,24 +650,20 @@ macro_rules! __impl_wrapper_methods {
                 }),
             }
         }
-        #[cfg(feature = "unprocessed")]
         fn new_unprocessed(value: impl Into<Self::Inner>) -> Self {
             let mut value = value.into();
             debug_assert!(Self::PROCESS(&mut value).is_ok());
             Self(value)
         }
-        #[cfg(feature = "unprocessed")]
         fn set_unprocessed(&mut self, value: impl Into<Self::Inner>) {
             let mut value = value.into();
             debug_assert!(Self::PROCESS(&mut value).is_ok());
             self.0 = value;
         }
-        #[cfg(feature = "unprocessed")]
         fn mutate_unprocessed(&mut self, f: impl FnOnce(&mut Self::Inner)) {
             f(&mut self.0);
             debug_assert!(Self::PROCESS(&mut self.0).is_ok());
         }
-        #[cfg(feature = "unprocessed")]
         fn verify(mut self) -> Result<Self, $crate::VerificationError<Self>> {
             match Self::PROCESS(&mut self.0) {
                 Ok(()) => Ok(self),

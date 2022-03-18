@@ -77,25 +77,17 @@ pub trait Wrapper: Sized {
 
     /// Construct a new wrapper without calling
     /// [`Self::PROCESS`](Self::PROCESS).
-    #[cfg(feature = "unprocessed")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     fn new_unprocessed(value: impl Into<Self::Inner>) -> Self;
 
     /// Replace inner value with the provided one without calling
     /// [`Self::PROCESS`](Self::PROCESS).
-    #[cfg(feature = "unprocessed")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     fn set_unprocessed(&mut self, value: impl Into<Self::Inner>);
 
     /// Mutate inner value using provided closure without calling
     /// [`Self::PROCESS`](Self::PROCESS).
-    #[cfg(feature = "unprocessed")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     fn mutate_unprocessed(&mut self, f: impl FnOnce(&mut Self::Inner));
 
     /// Verify that inner value still passes [`Self::PROCESS`](Self::PROCESS).
-    #[cfg(feature = "unprocessed")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "unprocessed")))]
     fn verify(self) -> Result<Self, VerificationError<Self>>;
 }
 
