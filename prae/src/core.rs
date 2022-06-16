@@ -56,6 +56,9 @@ pub trait Wrapper: Sized {
         self.__mutate_with(Self::Inner::clone, f)
     }
 
+    /// Unwrap the value into the inner type.
+    fn into_inner(self) -> Self::Inner;
+
     /// This is a helper method that should be implemented in order for `mutate`
     /// method to work in a generic way. This method should not be used directly
     /// by the user (hence `#[doc(hidden)]` and a weird name).

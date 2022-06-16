@@ -630,6 +630,9 @@ macro_rules! __impl_wrapper_methods {
                 Err(original) => Err($crate::ConstructionError { original, value }),
             }
         }
+        fn into_inner(self) -> Self::Inner {
+            self.0
+        }
         fn __mutate_with(
             &mut self,
             clone: impl Fn(&Self::Inner) -> Self::Inner,
