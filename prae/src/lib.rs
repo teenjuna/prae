@@ -97,7 +97,6 @@
 //!  Name | Description
 //!  ---|---
 //!  `serde` | Adds the [`impl_serde`] plugin.
-//!  `unprocessed` | Adds the `_unprocessed` methods to [`Wrapper`].
 //!
 //! # Credits
 //! This crate was highly inspired by the

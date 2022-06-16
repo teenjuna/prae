@@ -17,12 +17,10 @@ The easiest way to create a type that implements [`Wrapper`](crate::Wrapper)
 is to use [`define!`](crate::define) and [`extend!`](crate::extend) macros.
 
 ## Example
-
 Suppose you want to create a type `Username`. You want this type to be a
 `String`, and you don't want it to be empty. Traditionally, you would create
 a wrapper struct with getter and setter functions, like this simplified
 example:
-
 ```rust
 #[derive(Debug)]
 pub struct Username(String);
@@ -60,7 +58,6 @@ assert_eq!(err, "value is invalid");
 ```
 
 Using `prae`, you will do it like this:
-
 ```rust
 use prae::Wrapper;
 
@@ -93,21 +90,19 @@ zero impact on the compilation speed.
 If you find yourself in a situation where the internal adjustment and
 validation of your type becomes a performance bottleneck (for example, you
 perform a heavy validation and mutate your type in a hot loop) - try
-`_unprocessed` variants of `Wrapper` methods. They won't call
-`Wrapper::PROCESS`. However, I strongly advise you to call
-`Wrapper::verify` after such operations.
+`_unprocessed` variants of [`Wrapper`] methods. They won't call
+[`Wrapper::PROCESS`]. However, I strongly advise you to call
+[`Wrapper::verify`] after such operations.
 
 ## Feature flags
 
-`prae` provides additional features:
+ `prae` provides additional features:
 
-| Name          | Description                                   |
-| ------------- | --------------------------------------------- |
-| `serde`       | Adds the `impl_serde` plugin.                 |
-| `unprocessed` | Adds the `_unprocessed` methods to `Wrapper`. |
+ Name | Description
+ ---|---
+ `serde` | Adds the [`impl_serde`] plugin.
 
 ## Credits
-
 This crate was highly inspired by the
 [tightness](https://github.com/PabloMansanet/tightness) crate. It's basically
 just a fork of tightness with a slightly different philosophy.
