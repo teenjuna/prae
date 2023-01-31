@@ -15,6 +15,7 @@ pub trait Wrapper: Sized {
     /// The type of an error that can occur during the construction or mutation
     /// of the wrapper's value.
     type Error;
+
     /// The function that will mutate and validate wrapper's inner value on
     /// every construction and mutation.
     ///
@@ -63,7 +64,7 @@ pub trait Wrapper: Sized {
     /// method to work in a generic way. This method should not be used directly
     /// by the user (hence `#[doc(hidden)]` and a weird name).
     ///
-    /// Using this method, we allowing the trait to be implemented for both
+    /// Using this method, we're allowing the trait to be implemented for both
     /// `Clone` and `!Clone` types. `Clone` types will have the `mutate` method,
     /// while the `!Clone` types won't.
     ///
